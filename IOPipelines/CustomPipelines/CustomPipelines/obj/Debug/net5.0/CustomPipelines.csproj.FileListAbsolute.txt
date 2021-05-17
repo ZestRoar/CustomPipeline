@@ -1,0 +1,16 @@
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\CustomPipelines.exe
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\CustomPipelines.deps.json
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\CustomPipelines.runtimeconfig.json
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\CustomPipelines.runtimeconfig.dev.json
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\CustomPipelines.dll
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\ref\CustomPipelines.dll
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\CustomPipelines.pdb
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.csprojAssemblyReference.cache
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.AssemblyInfoInputs.cache
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.AssemblyInfo.cs
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.csproj.CoreCompileInputs.cache
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.dll
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\ref\CustomPipelines.dll
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.pdb
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.genruntimeconfig.cache

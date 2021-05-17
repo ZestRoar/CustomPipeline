@@ -52,11 +52,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\MsTest\\MsTest.csproj",
+      "projectUniqueName": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\MsTest\\MsTest.csproj",
       "projectName": "MsTest",
-      "projectPath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\MsTest\\MsTest.csproj",
+      "projectPath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\MsTest\\MsTest.csproj",
       "packagesPath": "C:\\Users\\doggyfoot\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\MsTest\\obj\\",
+      "outputPath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\MsTest\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\doggyfoot\\AppData\\Roaming\\NuGet\\NuGet.Config",

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "ZlN0Ftlga1btupQMBanfYmloADuY5eYq2DUUhlRqPEsM2ExGNV+OFCsMdfFD9L7OxQdk3vgqslDiN83+NW8Aag==",
+  "dgSpecHash": "HH+mOebP4UTksm74cv7RSHMpAlk/COmEQT6tuf4/vqBy/lP38J+zq0MIXj0Xezny1c+8GB3D2wU+clb85lzRsg==",
   "success": true,
-  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj",
+  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }

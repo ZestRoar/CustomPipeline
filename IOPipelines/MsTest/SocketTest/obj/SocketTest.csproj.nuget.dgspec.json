@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj": {}
+    "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj": {}
   },
   "projects": {
-    "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj": {
+    "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj",
+        "projectUniqueName": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj",
         "projectName": "SocketTest",
-        "projectPath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj",
+        "projectPath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\SocketTest\\SocketTest.csproj",
         "packagesPath": "C:\\Users\\doggyfoot\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\SocketTest\\obj\\",
+        "outputPath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\MsTest\\SocketTest\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\doggyfoot\\AppData\\Roaming\\NuGet\\NuGet.Config",

@@ -1,7 +1,8 @@
 ﻿
+using System;
 using System.Buffers;
 
-namespace CustomPipelines.CustomPipe.StreamControll
+namespace CustomPipelines
 {
     public readonly struct StateResult
     {
@@ -14,6 +15,14 @@ namespace CustomPipelines.CustomPipe.StreamControll
             resultFlags = StateFlags.None;
             resultFlags |= isCompleted ? StateFlags.Completed : StateFlags.None;
             resultFlags |= isCanceled ? StateFlags.Canceled : StateFlags.None;
+        }
+        public byte[] BufferToArray()
+        {
+            if (resultBuffer == null)
+            {
+                throw new NullReferenceException();
+            }
+            return System.Buffers.BuffersExtensions.ToArray<byte>(resultBuffer ?? throw new ArgumentNullException());
         }
 
         public ReadOnlySequence<byte>? Buffer => resultBuffer;  // 파이프라인에서 꺼낸 메모리를 읽는 용도
