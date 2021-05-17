@@ -1,0 +1,15 @@
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\SocketTest.exe
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\SocketTest.deps.json
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\SocketTest.runtimeconfig.json
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\SocketTest.runtimeconfig.dev.json
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\SocketTest.dll
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\ref\SocketTest.dll
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\bin\Debug\net5.0\SocketTest.pdb
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.AssemblyInfoInputs.cache
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.AssemblyInfo.cs
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.csproj.CoreCompileInputs.cache
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.dll
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\ref\SocketTest.dll
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.pdb
+C:\Users\doggyfoot\Desktop\MsTest\SocketTest\obj\Debug\net5.0\SocketTest.genruntimeconfig.cache

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "3bdNKFKz7nuktxEvtjjvp+x5NijB7Dc76xLQtqoZ8P75ZXmlLCQXsigI5LQidkyMgeFycw1L7ncPuh4hDQr7EA==",
+  "dgSpecHash": "+b2ldwKbcxUIGfgpc13YSxbMjg3YdWuMtDgnyO+hi294lpIlQiSu6FzO2Pt5hLhPJpfk6Nf2ABxi4H0xiG4DTA==",
   "success": true,
-  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
+  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }

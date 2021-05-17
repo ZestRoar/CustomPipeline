@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "4BXNO9/HeOWE7bZ5pMsoxHOufJu8zdSmLH3Xx79szMLtpShPq4f0lkRPiYyatN+SdcYL10NzHr9lAxwzU91ohg==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\MsTest\\MsTest\\MsTest.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\doggyfoot\\.nuget\\packages\\system.io.pipelines\\5.0.1\\system.io.pipelines.5.0.1.nupkg.sha512"
+  ],
+  "logs": []
+}

@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\doggyfoot\\Desktop\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
+      "projectUniqueName": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
       "projectName": "CustomPipelines",
-      "projectPath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
+      "projectPath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
       "packagesPath": "C:\\Users\\doggyfoot\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipelines\\CustomPipelines\\obj\\",
+      "outputPath": "C:\\Users\\doggyfoot\\Desktop\\IOPipelines\\CustomPipelines\\CustomPipelines\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\doggyfoot\\AppData\\Roaming\\NuGet\\NuGet.Config",
