@@ -18,6 +18,9 @@ namespace CustomPipelines
         public readonly int Length;
         private CustomPipeReader _reader;
         private CustomPipeWriter _writer;
+        private StateCallback _flushCallback;
+        private StateCallback _readCallback;
+        private StateCallback _writeCallback;
 
         public CustomPipe() : this(CustomPipeOptions.Default)
         {
