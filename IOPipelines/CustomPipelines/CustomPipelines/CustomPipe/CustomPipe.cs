@@ -35,8 +35,8 @@ namespace CustomPipelines
             _bufferSegmentPool = new BufferSegmentStack(options.InitialSegmentPoolSize);
 
             _options = options;
-            //_reader = new DefaultPipeReader(this);
-            //_writer = new DefaultPipeWriter(this);
+            _reader = new CustomPipeReader(this);
+            _writer = new CustomPipeWriter(this);
         }
 
 
@@ -150,7 +150,7 @@ namespace CustomPipelines
         {
             throw new NotImplementedException();
         }
-        public byte WriteResult(object obj)
+        public byte WriteResult(object? obj = null)
         {
             throw new NotImplementedException();
         }
