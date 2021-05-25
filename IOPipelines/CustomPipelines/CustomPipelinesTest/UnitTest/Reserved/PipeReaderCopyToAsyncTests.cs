@@ -1,4 +1,5 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using CustomPipelines;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CustomPipelinesTest
 {
@@ -6,7 +7,7 @@ namespace CustomPipelinesTest
     public class PipeReaderCopyToAsyncTests
     {
         [TestMethod]
-        public void TestMethod2()
+        public void CopyToAsyncThrowsArgumentNullExceptionForNullDestination()
         {
             
         }

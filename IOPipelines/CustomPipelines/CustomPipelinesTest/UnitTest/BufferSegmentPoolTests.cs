@@ -31,9 +31,8 @@ namespace CustomPipelinesTest
         {
             _pipe.WriteEmpty(_pool.MaxBufferSize);
 
-            while (_pipe.FlushAsync()) { }
-            while (_pipe.ReadAsync()) { }
-            StateResult result = _pipe.ReadResult();
+            _pipe.BlockingFlush();
+            StateResult result = _pipe.BlockingRead();
 
             //object oldSegment = result.Buffer.End.GetObject();
             object oldSegment = _pipe.GetObject();
@@ -48,9 +47,8 @@ namespace CustomPipelinesTest
             // 반환된 세그먼트가 사용되야 함
             _pipe.WriteEmpty(_pool.MaxBufferSize);
 
-            while (_pipe.FlushAsync()) { }
-            while (_pipe.ReadAsync()) { }
-            result = _pipe.ReadResult();
+            _pipe.BlockingFlush();
+            result = _pipe.BlockingRead();
 
             //object newSegment = result.Buffer.End.GetObject();
             object newSegment = _pipe.GetObject();
@@ -72,9 +70,8 @@ namespace CustomPipelinesTest
                 _pipe.WriteEmpty(_pool.MaxBufferSize);
             }
 
-            while (_pipe.FlushAsync()) { }
-            while (_pipe.ReadAsync()) { }
-            StateResult result = _pipe.ReadResult();
+            _pipe.BlockingFlush();
+            StateResult result = _pipe.BlockingRead();
 
             List<ReadOnlySequenceSegment<byte>> oldSegments = GetSegments(result);
 
@@ -88,9 +85,8 @@ namespace CustomPipelinesTest
                 _pipe.WriteEmpty(_pool.MaxBufferSize);
             }
 
-            while (_pipe.FlushAsync()) { }
-            while (_pipe.ReadAsync()) { }
-            result = _pipe.ReadResult();
+            _pipe.BlockingFlush();
+            result = _pipe.BlockingRead();
 
             List<ReadOnlySequenceSegment<byte>> newSegments = GetSegments(result);
 

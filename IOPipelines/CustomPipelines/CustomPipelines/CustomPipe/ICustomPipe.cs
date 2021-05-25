@@ -9,14 +9,14 @@ namespace CustomPipelines
 {
     internal interface ICustomPipeline
     {
-        public byte Write();
+        public bool Write();
         public byte Write(ReadOnlySpan<byte> span);
         public bool WriteAsync(object? obj);
-        public byte WriteResult(object? obj);
+        public StateResult WriteResult(object? obj);
         public StateResult Flush();
         public bool FlushAsync();
         public StateResult FlushResult();
-        public StateResult Read();
+        public bool Read();
         public bool ReadAsync();
         public StateResult ReadResult();
 

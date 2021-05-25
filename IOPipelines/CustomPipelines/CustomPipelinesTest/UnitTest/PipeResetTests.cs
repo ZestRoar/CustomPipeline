@@ -28,8 +28,8 @@ namespace CustomPipelinesTest
         {
             var source = new byte[] { 1, 2, 3 };
 
-            while (_pipe.WriteAsync(source)) { }
-            while (_pipe.ReadAsync()) { }
+            _pipe.BlockingWrite(source);
+            _pipe.BlockingRead();
 
             StateResult result = _pipe.ReadResult();
 
@@ -41,8 +41,8 @@ namespace CustomPipelinesTest
 
             _pipe.Reset();
 
-            while (_pipe.WriteAsync(source)) { }
-            while (_pipe.ReadAsync()) { }
+            _pipe.BlockingWrite(source);
+            _pipe.BlockingRead();
 
             result = _pipe.ReadResult();
 

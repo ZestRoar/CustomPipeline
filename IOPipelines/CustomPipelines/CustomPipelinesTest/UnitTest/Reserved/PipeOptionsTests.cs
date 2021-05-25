@@ -1,4 +1,5 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
 
 namespace CustomPipelinesTest
 {
@@ -6,7 +7,7 @@ namespace CustomPipelinesTest
     public class PipeOptionsTests
     {
         [TestMethod]
-        public void TestMethod2()
+        public void InvalidArgs_Throws()
         {
             
         }

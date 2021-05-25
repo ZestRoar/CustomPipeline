@@ -57,6 +57,19 @@ namespace CustomPipelines
             state &= ~State.Writing;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void BeginFlush()
+        {
+            state |= State.Flushing;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void EndFlush()
+        {
+            state &= ~State.Flushing;
+        }
+
+
 
         public bool IsWritingActive => (state & State.Writing) == State.Writing;
 
@@ -67,7 +80,8 @@ namespace CustomPipelines
         {
             Reading = 1,
             ReadingTentative = 2,
-            Writing = 4
+            Writing = 4,
+            Flushing = 8
         }
     }
 
