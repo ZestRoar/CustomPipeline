@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,10 +10,9 @@ namespace CustomPipelines
 {
     internal interface ICustomPipeline
     {
-        public bool Write();
-        public byte Write(ReadOnlySpan<byte> span);
-        public bool WriteAsync(object? obj);
-        public StateResult WriteResult(object? obj);
+        public bool Write(byte[] buffer, int offset, int count);
+        public bool WriteAsync(Stream? obj);
+        public StateResult WriteResult();
         public StateResult Flush();
         public bool FlushAsync();
         public StateResult FlushResult();

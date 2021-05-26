@@ -38,7 +38,14 @@ namespace CustomPipelines
                 int bytesRead = -1;
                 while (bytesRead != 0)
                 {
-                    bytesRead = pipe.BlockingWrite(socket);
+                    bytesRead = socket.Receive(bytes);
+
+                    if (bytesRead == 0)
+                    {
+                        break;
+                    }
+
+                    pipe.Write(bytes, 0, bytesRead); // 내부에서 Flush 호출
 
                     pipe.Advance(bytesRead);
 
@@ -55,24 +62,22 @@ namespace CustomPipelines
                     var result = pipe.BlockingRead();
                     var buffer = result.Buffer.Value;
 
-
-                    if (readPosition != null)
-                    {
-                        buffer = buffer.Slice(buffer.GetPosition(1, readPosition.Value), buffer.End);
-                    }
-
                     pipe.AdvanceTo(buffer.Start, buffer.End); // 사용된 데이터 알리기
                     readPosition = buffer.PositionOf((byte)'\n');
-                    if (result.IsCanceled || (result.IsCompleted && buffer.IsEmpty))
+
+                    if (result.IsCanceled || result.IsCompleted)
                     {
                         break;
                     }
                 }
 
-            }
-            
+                pipe.CompleteReader();
 
-           
+                
+            }
+
+
+
         }
 
         private static void ProcessLine(ReadOnlySequence<byte> buffer)
@@ -97,5 +102,6 @@ namespace CustomPipelines
         {
             Console.WriteLine("callback : read");
         }
+
     }
 }

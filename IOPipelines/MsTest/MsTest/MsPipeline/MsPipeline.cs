@@ -70,6 +70,11 @@ namespace MsTest.MsPipeline
             throw new NotImplementedException();
         }
 
+        public StateResult Read(out ReadOnlySequence<byte> buffer)
+        {
+            throw new NotImplementedException();
+        }
+
         public StateResult ReadAsync(out ReadOnlySequence<byte> buffer)
         {
             throw new NotImplementedException();

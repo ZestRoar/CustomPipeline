@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -21,12 +22,11 @@ namespace CustomPipelines
         private readonly object sync = new object();
         private CustomPipeReader reader;
         private CustomPipeWriter writer;
-        private StateCallback flushCallback;
-        private StateCallback readCallback;
-        private StateCallback writeCallback;
-        private StateCallback flushCompletionCallback;
-        private StateCallback readCompletionCallback;
-        private StateCallback writeCompletionCallback;
+
+        // 여러 콜백 등록 용도
+        private CallbackManager callbacks;
+        // 파이프 상태 체크 용
+        private DataFlowManager dataflow;
 
         // 파이프 상에서의 공유 자원의 안전한 동기화를 위한 객체
         private object SyncObj => sync;
@@ -54,19 +54,7 @@ namespace CustomPipelines
         private Memory<byte> writingHeadMemory;
         private int writingHeadBytesBuffered;
 
-        // read/write 상태 판단을 위한 구조체
-        private StateOperation operationState;
         public long Length => unconsumedBytes;
-
-        // 완료 상태 체크용 (필요 시 awaitable, completion 추가 구현)
-        private bool readCanceled;
-        private bool writeCanceled;
-        private bool flushCanceled;
-        private bool readComplete;
-        private bool writeComplete;
-        private bool readAwait;
-        private bool writeAwait;
-        private bool readerRunning;
 
 
         public CustomPipe() : this(CustomPipeOptions.Default)
@@ -86,29 +74,33 @@ namespace CustomPipelines
             writer = new CustomPipeWriter(this);
         }
 
+        public bool CanWrite => false;
+        public bool CanRead => true;
+
+
         public void RegisterReadCallback(Action action, bool repeat = true)
         {
-            readCallback = new StateCallback(action, repeat);
+            callbacks.ReadCallback = new StateCallback(action, repeat);
         }
         public void RegisterFlushCallback(Action action, bool repeat = true)
         {
-            flushCallback = new StateCallback(action, repeat);
+            callbacks.FlushCallback = new StateCallback(action, repeat);
         }
         public void RegisterWriteCallback(Action action, bool repeat = true)
         {
-            writeCallback = new StateCallback(action, repeat);
+            callbacks.WriteCallback = new StateCallback(action, repeat);
         }
         public void RegisterReadCompletionCallback(Action action, bool repeat = true)
         {
-            readCompletionCallback = new StateCallback(action, repeat);
+            callbacks.ReadCompletionCallback = new StateCallback(action, repeat);
         }
         public void RegisterFlushCompletionCallback(Action action, bool repeat = true)
         {
-            flushCompletionCallback = new StateCallback(action, repeat);
+            callbacks.FlushCompletionCallback = new StateCallback(action, repeat);
         }
         public void RegisterWriteCompletionCallback(Action action, bool repeat = true)
         {
-            writeCompletionCallback = new StateCallback(action, repeat);
+            callbacks.WriteCompletionCallback = new StateCallback(action, repeat);
         }
 
         private void ResetState()
@@ -131,7 +123,7 @@ namespace CustomPipelines
                     Trace.WriteLine("bytes : out of range");
                 }
 
-                if (readComplete)
+                if (dataflow.IsReadingOver)
                 {
                     return;
                 }
@@ -159,7 +151,7 @@ namespace CustomPipelines
         }
         public void AdvanceTo(SequencePosition startPosition, SequencePosition endPosition)
         {
-            if (readComplete)
+            if (dataflow.IsReadingOver)
             {
                 Trace.WriteLine("No Reading Allowed");
             }
@@ -207,7 +199,7 @@ namespace CustomPipelines
                         unconsumedBytes < options.ResumeWriterThreshold)
                     {
                         //_writerAwaitable.Complete(out completionData);
-                        writeAwait = false;
+                        dataflow.FinishWriting();
                     }
                 }
 
@@ -247,7 +239,7 @@ namespace CustomPipelines
                         }
                         // If the writing head is the same as the block to be returned, then we need to make sure
                         // there's no pending write and that there's no buffered data for the writing head
-                        else if (writingHeadBytesBuffered == 0 && !operationState.IsWritingActive)
+                        else if (writingHeadBytesBuffered == 0 && !dataflow.IsWritingActive)
                         {
                             // Reset the writing head to null if it's the return block and we've consumed everything
                             writingHead = null;
@@ -270,11 +262,11 @@ namespace CustomPipelines
 
                 // We reset the awaitable to not completed if we've examined everything the producer produced so far
                 // but only if writer is not completed yet
-                if (examinedEverything && !writeComplete)
+                if (examinedEverything && !dataflow.IsWritingOver)
                 {
-                    Debug.Assert(writeComplete, "PipeWriter.FlushAsync is isn't completed and will deadlock");
+                    Debug.Assert(dataflow.IsWritingOver, "PipeWriter.FlushAsync is isn't completed and will deadlock");
 
-                    readAwait = true;
+                    dataflow.ResumeWriting();
                 }
 
                 while (returnStart != null && returnStart != returnEnd)
@@ -294,7 +286,7 @@ namespace CustomPipelines
                     returnStart = next;
                 }
 
-                operationState.EndRead();
+                dataflow.EndRead();
             }
 
             //TrySchedule(WriterScheduler, completionData);
@@ -317,12 +309,70 @@ namespace CustomPipelines
 
         public void CompleteReader(Exception exception = null)
         {
-            throw new NotImplementedException();
+            lock (SyncObj)
+            {
+                if (dataflow.IsReadingActive)
+                {
+                    dataflow.EndRead();
+                }
+
+                dataflow.FinishReading();
+                dataflow.FinishWriting();       
+            }
+
+            if (dataflow.IsWritingOver)
+            {
+                CompletePipe();
+            }
+
+            callbacks.ReadCompletionCallback.RunCallback();
         }
 
         public void CompleteWriter(Exception exception = null)
         {
-            throw new NotImplementedException();
+            lock (SyncObj)
+            {
+                CommitUnsynchronized(); // 보류 중인 버퍼 커밋
+
+                dataflow.FinishWriting();
+                dataflow.FinishReading();
+            }
+
+            if (dataflow.IsReadingOver)
+            {
+                CompletePipe();
+            }
+
+            callbacks.WriteCompletionCallback.RunCallback();
+        }
+        private void CompletePipe()
+        {
+            lock (SyncObj)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                // Return all segments
+                // if _readHead is null we need to try return _commitHead
+                // because there might be a block allocated for writing
+                BufferSegment? segment = readHead ?? readTail;
+                while (segment != null)
+                {
+                    BufferSegment returnSegment = segment;
+                    segment = segment.NextSegment;
+
+                    returnSegment.ResetMemory();
+                }
+
+                writingHead = null;
+                writingHeadMemory = default;
+                readHead = null;
+                readTail = null;
+                lastExaminedIndex = -1;
+            }
         }
 
         public StateResult Flush()
@@ -336,9 +386,9 @@ namespace CustomPipelines
             {
                 var wasEmpty = CommitUnsynchronized();
 
-                operationState.BeginFlush();
+                dataflow.BeginFlush();
 
-                if (!writeAwait)
+                if (dataflow.IsWritingCompleted)
                 {
                     UpdateFlushResult();            // cancel 갱신 안하면 계속 취소 상태 (후처리 필요)
                 }
@@ -349,18 +399,18 @@ namespace CustomPipelines
 
                 if (!wasEmpty)
                 {
-                    readAwait = false;
+                    dataflow.FinishReading();
                 }
 
-                Debug.Assert(!writeAwait || !readAwait);
+                Debug.Assert(dataflow.IsWritingOver || dataflow.IsReadingOver);
             }
 
-            return !readAwait;
+            return dataflow.IsWritingOver;
         }
 
         internal bool CommitUnsynchronized()
         {
-            operationState.EndWrite();
+            dataflow.EndWrite();
 
             if (unflushedBytes == 0)
             {
@@ -383,10 +433,10 @@ namespace CustomPipelines
             if (options.PauseWriterThreshold > 0 &&
                 oldLength < options.PauseWriterThreshold &&
                 unconsumedBytes >= options.PauseWriterThreshold &&
-                !readComplete)
+                !dataflow.IsReadingOver)
             {
                 //writerAwaitable.SetUncompleted();
-                writeAwait = true;
+                dataflow.ResumeWriting();
             }
 
             unflushedBytes = 0;
@@ -401,14 +451,15 @@ namespace CustomPipelines
         }
         public StateResult FlushResult()
         {
-            bool isCanceled = flushCanceled;
-            flushCanceled = false;
-            return new StateResult(isCanceled, readComplete);
+            bool isCanceled = !dataflow.FlushObserved;
+            dataflow.FlushObserved = true;
+            dataflow.FinishWriting();
+            return new StateResult(isCanceled, dataflow.IsReadingOver);
         }
 
         private void UpdateFlushResult()
         {
-            operationState.EndFlush();
+            dataflow.EndFlush();
         }
 
         public long GetPosition()
@@ -418,7 +469,7 @@ namespace CustomPipelines
 
         public Memory<byte> GetWriterMemory(int sizeHint = 0)
         {
-            if (writeComplete)
+            if (dataflow.IsWritingOver)
             {
                 Trace.WriteLine("NoWritingAllowed");
             }
@@ -428,7 +479,7 @@ namespace CustomPipelines
                 Trace.WriteLine("OutOfRange");
             }
 
-            if (!operationState.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < sizeHint)
+            if (!dataflow.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < sizeHint)
             {
                 AllocateWriteHeadSynchronized(sizeHint);        // 세그먼트가 없다면 만들어서 쓰기용 구획을 준비해 두기
             }
@@ -439,7 +490,7 @@ namespace CustomPipelines
         {
             lock (SyncObj)
             {
-                operationState.BeginWrite();
+                dataflow.BeginWrite();
 
                 if (writingHead == null)
                 {
@@ -523,19 +574,21 @@ namespace CustomPipelines
 
         public bool ReadAsync()
         {
-            if (readComplete)
+            if (dataflow.IsReadingOver)
             {
                 Trace.WriteLine("NoReadingAllowed");
             }
 
             lock (SyncObj)
             {
-                readerRunning = true;
-
-                
+                UpdateReadResult();
+                //dataflow.ReadObserved = true;   // 조건부
+                //dataflow.EndRead();           // 메커니즘 추가 필요
             }
 
-            return !readAwait;
+            callbacks.ReadCallback.RunCallback();
+
+            return dataflow.IsReadingOver;
         }
         public StateResult BlockingRead()
         {
@@ -547,18 +600,23 @@ namespace CustomPipelines
         {
             var readOnlySequence = readHead == null ? default : 
                 new ReadOnlySequence<byte>(readHead, readHeadIndex, readTail, readTailIndex);
-            return new StateResult(writeComplete, readCanceled, readOnlySequence);
+            return new StateResult(dataflow.ReadObserved, dataflow.IsWritingOver, readOnlySequence);
+        }
+
+        public int ReadByte()
+        {
+            return readTailIndex - readHeadIndex;
         }
 
         private void UpdateReadResult()
         {
-            if (readCanceled)
+            if (dataflow.ReadObserved)
             {
-                operationState.BeginReadTentative();
+                dataflow.BeginReadTentative();
             }
             else
             {
-                operationState.BeginRead();
+                dataflow.BeginRead();
             }
         }
 
@@ -567,50 +625,60 @@ namespace CustomPipelines
             throw new NotImplementedException();
         }
 
-        public bool Write()
+        public bool Write(byte[] buffer, int offset, int count) =>
+            WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count));
+
+        public bool WriteAsync(Stream? stream)
         {
-            throw new NotImplementedException();
-        }
-        public byte Write(ReadOnlySpan<byte> span)
-        {
-            throw new NotImplementedException();
+            long originalPosition = 0;
+            if (stream.CanSeek)
+            {
+                originalPosition = stream.Position;
+                stream.Position = 0;
+            }
+
+            bool writeActivated = false;
+            using (var memoryStream = new MemoryStream())
+            {
+                stream.CopyTo(memoryStream);
+                writeActivated = WriteAsync(memoryStream.ToArray());
+            }
+
+            return writeActivated;
         }
 
-        public bool WriteAsync(object obj)
+        public bool WriteAsync(ReadOnlyMemory<byte> sourceMemory)
         {
-            throw new NotImplementedException();
-        }
-
-        public bool WriteAsync(ReadOnlyMemory<byte> source)
-        {
-            if (writeComplete)
+            if (dataflow.IsWritingOver)
             {
                 Trace.WriteLine("NoWritingAllowed");
             }
 
             lock (SyncObj)
             {
-                if (!operationState.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < 0)
+                if (!dataflow.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < 0)
                 {
                     AllocateWriteHeadSynchronized(0);
                 }
 
-                if (source.Length <= writingHeadMemory.Length)
+                if (sourceMemory.Length <= writingHeadMemory.Length)
                 {
-                    source.CopyTo(writingHeadMemory);
+                    sourceMemory.CopyTo(writingHeadMemory);
 
-                    AdvanceCore(source.Length);
+                    AdvanceCore(sourceMemory.Length);
                 }
                 else
                 {
-                    WriteMultiSegment(source.Span);
+                    WriteMultiSegment(sourceMemory.Span);
                 }
 
                 //PrepareFlush(out completionData, out result, cancellationToken);
                 FlushAsync();
             }
 
-            return !writeAwait;
+            callbacks.WriteCallback.RunCallback();
+
+            return dataflow.IsWritingOver;
         }
         private void WriteMultiSegment(ReadOnlySpan<byte> source)
         {
@@ -643,15 +711,15 @@ namespace CustomPipelines
                 destination = writingHeadMemory.Span;
             }
         }
-        public int BlockingWrite(object obj)
+        public int BlockingWrite(Stream? obj)
         {
             int bytes = 0;
             while (WriteAsync(obj)) { }
             return bytes;
         }
-        public StateResult WriteResult(object? obj = null)
+        public StateResult WriteResult()
         {
-            if (readComplete)
+            if (dataflow.IsReadingOver)
             {
                 return new StateResult(false,true);
             }
@@ -665,6 +733,16 @@ namespace CustomPipelines
         }
 
         public object GetObject() // 세그먼트를 반환하는 용도
+        {
+            throw new NotImplementedException();
+        }
+
+        public Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Span<byte> GetSpan(int sizeHint = 0)
         {
             throw new NotImplementedException();
         }

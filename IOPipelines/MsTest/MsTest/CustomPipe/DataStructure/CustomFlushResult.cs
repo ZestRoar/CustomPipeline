@@ -17,6 +17,6 @@ namespace MsTest
 
         public bool IsCanceled => (_resultFlags & CustomResultFlags.Canceled) != 0;
         public bool IsCompleted => (_resultFlags & CustomResultFlags.Completed) != 0;
-        public bool IsEnded => (_resultFlags & CustomResultFlags.Ended) != 0;
+        public bool IsEnded => (_resultFlags & CustomResultFlags.Completed) != 0;
     }
 }
