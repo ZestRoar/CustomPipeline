@@ -628,6 +628,8 @@ namespace CustomPipelines
             throw new NotImplementedException();
         }
 
+        public bool Write(byte[] buffer, int offset=0) =>
+            WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, buffer.Length));
         public bool Write(byte[] buffer, int offset, int count) =>
             WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count));
 
