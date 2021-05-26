@@ -51,7 +51,7 @@ namespace CustomPipelines
 
                     StateResult result = pipe.FlushResult();
 
-                    if (result.IsCompleted || result.IsCanceled)
+                    if (result.IsCanceled)
                     {
                         break;
                     }

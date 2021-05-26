@@ -9,7 +9,7 @@ namespace CustomPipelines
     internal class CallbackManager
     {
        
-        CallbackManager()
+        public CallbackManager()
         {
             FlushCallback = null;
             ReadCallback = null;

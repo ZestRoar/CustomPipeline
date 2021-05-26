@@ -34,7 +34,7 @@ namespace CustomPipelines
 
         public bool WriteAsync(ReadOnlyMemory<byte> source) => _pipe.WriteAsync(source);
 
-        public byte WriteResult() => _pipe.WriteResult();   // write의 flush_result가 필요할 수도 있음
+        public StateResult WriteResult() => _pipe.WriteResult();   // write의 flush_result가 필요할 수도 있음
 
 
         protected internal bool CopyFromAsync(Stream source)

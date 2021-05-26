@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -72,6 +73,8 @@ namespace CustomPipelines
             this.options = options;
             reader = new CustomPipeReader(this);
             writer = new CustomPipeWriter(this);
+            callbacks = new CallbackManager();
+            dataflow = new DataFlowManager();
         }
 
         public bool CanWrite => false;
@@ -628,6 +631,11 @@ namespace CustomPipelines
         public bool Write(byte[] buffer, int offset, int count) =>
             WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count));
 
+        public bool WriteAsync(Object? obj)
+        {
+            throw new NotImplementedException();
+        }
+
         public bool WriteAsync(Stream? stream)
         {
             long originalPosition = 0;
@@ -712,6 +720,12 @@ namespace CustomPipelines
             }
         }
         public int BlockingWrite(Stream? obj)
+        {
+            int bytes = 0;
+            while (WriteAsync(obj)) { }
+            return bytes;
+        }
+        public int BlockingWrite(Object? obj)
         {
             int bytes = 0;
             while (WriteAsync(obj)) { }
