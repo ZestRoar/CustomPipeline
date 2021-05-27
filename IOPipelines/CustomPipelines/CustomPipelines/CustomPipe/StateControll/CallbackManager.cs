@@ -11,19 +11,12 @@ namespace CustomPipelines
        
         public CallbackManager()
         {
-            FlushCallback = null;
             ReadCallback = null;
             WriteCallback = null;
-            FlushCompletionCallback = null;
-            ReadCompletionCallback = null;
-            WriteCompletionCallback = null;
         }
-        
-        internal StateCallback FlushCallback { get; set; }
+
         internal StateCallback ReadCallback { get; set; }
         internal StateCallback WriteCallback { get; set; }
-        internal StateCallback FlushCompletionCallback { get; set; }
-        internal StateCallback ReadCompletionCallback { get; set; }
-        internal StateCallback WriteCompletionCallback { get; set; }
+
     }
 }

@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 
 namespace CustomPipelines
 {
-    class DataFlowManager
+    class CustomPipeState
     {
         private FlowState readState;
         private FlowState writeState;
         private OperationState operationState;
 
-        public DataFlowManager()
+        public CustomPipeState()
         {
             readState = FlowState.None;
             writeState = FlowState.None;
@@ -23,6 +23,13 @@ namespace CustomPipelines
 
         internal bool FlushObserved { get; set; } = false;
         internal bool ReadObserved { get; set; } = false;
+
+        public void Reset()
+        {
+            readState = FlowState.None;
+            writeState = FlowState.None;
+            operationState = OperationState.None;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void BeginRead()

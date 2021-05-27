@@ -5,11 +5,11 @@ using System.Runtime.CompilerServices;
 
 namespace CustomPipelines
 {
-    internal sealed class BufferSegment : ReadOnlySequenceSegment<byte>
+    internal sealed class CustomBufferSegment : ReadOnlySequenceSegment<byte>
     {
         private IMemoryOwner<byte>? _memoryOwner;
         private byte[]? _array;
-        private BufferSegment? _next;
+        private CustomBufferSegment? _next;
         private int _end;
 
         /// <summary>
@@ -34,7 +34,7 @@ namespace CustomPipelines
         /// Start, End, Next 요소들은 불연속적인 메모리의 연결 리스트를 생성하는데에 쓰인다.
         /// 메모리 블록 안에서의 시작과 끝 지점의 변화, 그리고 다음 메모리 블록을 풀에서 할당하거나 블록을 해제하는 경우에 활성 메모리의 증감이 일어난다.
         /// </summary>
-        public BufferSegment? NextSegment
+        public CustomBufferSegment? NextSegment
         {
             get => _next;
             set
@@ -91,7 +91,7 @@ namespace CustomPipelines
             get => AvailableMemory.Length - End;
         }
 
-        public void SetNext(BufferSegment segment)
+        public void SetNext(CustomBufferSegment segment)
         {
             Debug.Assert(segment != null);
             Debug.Assert(Next == null);
@@ -109,13 +109,13 @@ namespace CustomPipelines
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static long GetLength(BufferSegment startSegment, int startIndex, BufferSegment endSegment, int endIndex)
+        internal static long GetLength(CustomBufferSegment startSegment, int startIndex, CustomBufferSegment endSegment, int endIndex)
         {
             return (endSegment.RunningIndex + (uint)endIndex) - (startSegment.RunningIndex + (uint)startIndex);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static long GetLength(long startPosition, BufferSegment endSegment, int endIndex)
+        internal static long GetLength(long startPosition, CustomBufferSegment endSegment, int endIndex)
         {
             return (endSegment.RunningIndex + (uint)endIndex) - startPosition;
         }

@@ -1,66 +1,54 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Data;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CustomPipelines
 {
-    public sealed class CustomPipe : ICustomPipeline
+
+    public sealed class CustomPipe 
     {
-        internal const int InitialSegmentPoolSize = 16; // 65K
-        public const int MaxSegmentPoolSize = 256; // 1MB
-        
-        private BufferSegmentStack bufferSegmentPool;
+        private CustomBufferSegmentStack customBufferSegmentPool;
 
         private readonly CustomPipeOptions options;
-        private readonly object sync = new object();
-        private CustomPipeReader reader;
-        private CustomPipeWriter writer;
 
         // 여러 콜백 등록 용도
         private CallbackManager callbacks;
-        // 파이프 상태 체크 용
-        private DataFlowManager dataflow;
 
-        // 파이프 상에서의 공유 자원의 안전한 동기화를 위한 객체
-        private object SyncObj => sync;
+        // 파이프 상태 체크 용
+        private CustomPipeState pipeState;
 
         private long unconsumedBytes;
         private long unflushedBytes;
 
-        // readHead - readTail - writingHead - lastExamined 순인듯
+        // readHead - readTail - writingHead - lastExamined 순
 
         // 메모리 관리용 데이터, 마지막 위치를 인덱싱하며 해제 바이트 측정에 사용
         private long lastExaminedIndex = -1;
 
         // 읽기 중인 메모리의 시작 부분을 나타냄
-        private BufferSegment? readHead;
+        private CustomBufferSegment? readHead;
         private int readHeadIndex;
 
         private bool disposed;
 
         // 읽기 가능한 메모리의 끝 부분을 나타냄
-        private BufferSegment? readTail;
+        private CustomBufferSegment? readTail;
         private int readTailIndex;
 
         // 쓰기 중인 바이트 범위 중 시작 부분을 나타냄
-        private BufferSegment? writingHead;
+        private CustomBufferSegment? writingHead;
         private Memory<byte> writingHeadMemory;
         private int writingHeadBytesBuffered;
 
         public long Length => unconsumedBytes;
 
-
         public CustomPipe() : this(CustomPipeOptions.Default)
         {
+           
         }
+
         public CustomPipe(CustomPipeOptions options)
         {
             if (options == null)
@@ -68,13 +56,11 @@ namespace CustomPipelines
                 //ThrowHelper.ThrowArgumentNullException(ExceptionArgument.options);
             }
 
-            bufferSegmentPool = new BufferSegmentStack(options.InitialSegmentPoolSize);
+            customBufferSegmentPool = new CustomBufferSegmentStack(options);
 
             this.options = options;
-            reader = new CustomPipeReader(this);
-            writer = new CustomPipeWriter(this);
-            callbacks = new CallbackManager();
-            dataflow = new DataFlowManager();
+            this.callbacks = new CallbackManager();
+            this.pipeState = new CustomPipeState();
         }
 
         public bool CanWrite => false;
@@ -83,178 +69,162 @@ namespace CustomPipelines
 
         public void RegisterReadCallback(Action action, bool repeat = true)
         {
-            callbacks.ReadCallback = new StateCallback(action, repeat);
+            this.callbacks.ReadCallback = new StateCallback(action, repeat);
         }
-        public void RegisterFlushCallback(Action action, bool repeat = true)
-        {
-            callbacks.FlushCallback = new StateCallback(action, repeat);
-        }
+
         public void RegisterWriteCallback(Action action, bool repeat = true)
         {
-            callbacks.WriteCallback = new StateCallback(action, repeat);
+            this.callbacks.WriteCallback = new StateCallback(action, repeat);
         }
-        public void RegisterReadCompletionCallback(Action action, bool repeat = true)
-        {
-            callbacks.ReadCompletionCallback = new StateCallback(action, repeat);
-        }
-        public void RegisterFlushCompletionCallback(Action action, bool repeat = true)
-        {
-            callbacks.FlushCompletionCallback = new StateCallback(action, repeat);
-        }
-        public void RegisterWriteCompletionCallback(Action action, bool repeat = true)
-        {
-            callbacks.WriteCompletionCallback = new StateCallback(action, repeat);
-        }
+
 
         private void ResetState()
         {
-            readTailIndex = 0;
-            readHeadIndex = 0;
-            lastExaminedIndex = -1;
-            unflushedBytes = 0;
-            unconsumedBytes = 0;
+            this.pipeState.Reset();
+            this.readTailIndex = 0;
+            this.readHeadIndex = 0;
+            this.lastExaminedIndex = -1;
+            this.unflushedBytes = 0;
+            this.unconsumedBytes = 0;
         }
 
 
 
         public void Advance(int bytes)
         {
-            lock (SyncObj)
+
+            if ((uint) bytes > (uint)this.writingHeadMemory.Length)
             {
-                if ((uint)bytes > (uint)writingHeadMemory.Length)
-                {
-                    Trace.WriteLine("bytes : out of range");
-                }
-
-                if (dataflow.IsReadingOver)
-                {
-                    return;
-                }
-
-                AdvanceCore(bytes);
+                Trace.WriteLine("bytes : out of range");
             }
+
+            if (this.pipeState.IsReadingOver)
+            {
+                return;
+            }
+
+            this.AdvanceCore(bytes);
+
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AdvanceCore(int bytesWritten)
         {
-            unflushedBytes += bytesWritten;
-            writingHeadBytesBuffered += bytesWritten;
-            writingHeadMemory = writingHeadMemory.Slice(bytesWritten);
+            this.unflushedBytes += bytesWritten;
+            this.writingHeadBytesBuffered += bytesWritten;
+            this.writingHeadMemory = this.writingHeadMemory.Slice(bytesWritten);
         }
 
         public void AdvanceToEnd()
         {
             SequencePosition endPosition = ReadResult().Buffer.Value.End;
-            AdvanceTo(endPosition, endPosition);
+            this.AdvanceTo(endPosition, endPosition);
         }
+
         public void AdvanceTo(SequencePosition endPosition)
         {
             AdvanceTo(endPosition, endPosition);
         }
+
         public void AdvanceTo(SequencePosition startPosition, SequencePosition endPosition)
         {
-            if (dataflow.IsReadingOver)
+            if (this.pipeState.IsReadingOver)
             {
                 Trace.WriteLine("No Reading Allowed");
             }
 
-            AdvanceReader((BufferSegment?)startPosition.GetObject(), startPosition.GetInteger(), 
-                (BufferSegment?)endPosition.GetObject(), endPosition.GetInteger());
+            AdvanceReader((CustomBufferSegment?) startPosition.GetObject(), startPosition.GetInteger(),
+                (CustomBufferSegment?) endPosition.GetObject(), endPosition.GetInteger());
         }
-        private void AdvanceReader(BufferSegment? consumedSegment, int consumedIndex, BufferSegment? examinedSegment, int examinedIndex)
+
+        private void AdvanceReader(CustomBufferSegment? consumedSegment, int consumedIndex,
+            CustomBufferSegment? examinedSegment, int examinedIndex)
         {
             // Throw if examined < consumed
-            if (consumedSegment != null && examinedSegment != null && BufferSegment.GetLength(consumedSegment, consumedIndex, examinedSegment, examinedIndex) < 0)
+            if (consumedSegment != null && examinedSegment != null &&
+                CustomBufferSegment.GetLength(consumedSegment, consumedIndex, examinedSegment, examinedIndex) < 0)
             {
                 Trace.WriteLine("InvalidExaminedOrConsumedPosition");
             }
 
-            BufferSegment? returnStart = null;
-            BufferSegment? returnEnd = null;
+            CustomBufferSegment? returnStart = null;
+            CustomBufferSegment? returnEnd = null;
 
-            lock (SyncObj)
+
+            var examinedEverything = false;
+            if (examinedSegment == readTail)
             {
-                var examinedEverything = false;
-                if (examinedSegment == readTail)
+                examinedEverything = examinedIndex == readTailIndex;
+            }
+
+            if (examinedSegment != null && lastExaminedIndex >= 0)
+            {
+                long examinedBytes = CustomBufferSegment.GetLength(lastExaminedIndex, examinedSegment, examinedIndex);
+                long oldLength = unconsumedBytes;
+
+                if (examinedBytes < 0)
                 {
-                    examinedEverything = examinedIndex == readTailIndex;
+                    Trace.WriteLine("InvalidExaminedPosition");
                 }
 
-                if (examinedSegment != null && lastExaminedIndex >= 0)
+                unconsumedBytes -= examinedBytes;
+
+                // Store the absolute position
+                lastExaminedIndex = examinedSegment.RunningIndex + examinedIndex;
+
+                Debug.Assert(unconsumedBytes >= 0, "Length has gone negative");
+
+                if (oldLength >= this.options.ResumeWriterThreshold &&
+                    unconsumedBytes < this.options.ResumeWriterThreshold)
                 {
-                    long examinedBytes = BufferSegment.GetLength(lastExaminedIndex, examinedSegment, examinedIndex);
-                    long oldLength = unconsumedBytes;
+                    //_writerAwaitable.Complete(out completionData);
+                    this.pipeState.FinishWriting();
+                }
+            }
 
-                    if (examinedBytes < 0)
-                    {
-                        Trace.WriteLine("InvalidExaminedPosition");
-                    }
-
-                    unconsumedBytes -= examinedBytes;
-
-                    // Store the absolute position
-                    lastExaminedIndex = examinedSegment.RunningIndex + examinedIndex;
-
-                    Debug.Assert(unconsumedBytes >= 0, "Length has gone negative");
-
-                    if (oldLength >= options.ResumeWriterThreshold &&
-                        unconsumedBytes < options.ResumeWriterThreshold)
-                    {
-                        //_writerAwaitable.Complete(out completionData);
-                        dataflow.FinishWriting();
-                    }
+            if (consumedSegment != null)
+            {
+                if (readHead == null)
+                {
+                    Trace.WriteLine("AdvanceToInvalidCursor");
+                    return;
                 }
 
-                if (consumedSegment != null)
+                returnStart = readHead;
+                returnEnd = consumedSegment;
+
+                void MoveReturnEndToNextBlock()
                 {
-                    if (readHead == null)
+                    CustomBufferSegment? nextBlock = returnEnd!.NextSegment;
+                    if (readTail == returnEnd)
                     {
-                        Trace.WriteLine("AdvanceToInvalidCursor");
-                        return;
+                        readTail = nextBlock;
+                        readTailIndex = 0;
                     }
 
-                    returnStart = readHead;
-                    returnEnd = consumedSegment;
+                    readHead = nextBlock;
+                    readHeadIndex = 0;
 
-                    void MoveReturnEndToNextBlock()
+                    returnEnd = nextBlock;
+                }
+
+                if (consumedIndex == returnEnd.Length)
+                {
+                    // If the writing head isn't block we're about to return, then we can move to the next one
+                    // and return this block safely
+                    if (writingHead != returnEnd)
                     {
-                        BufferSegment? nextBlock = returnEnd!.NextSegment;
-                        if (readTail == returnEnd)
-                        {
-                            readTail = nextBlock;
-                            readTailIndex = 0;
-                        }
-
-                        readHead = nextBlock;
-                        readHeadIndex = 0;
-
-                        returnEnd = nextBlock;
+                        MoveReturnEndToNextBlock();
                     }
-
-                    if (consumedIndex == returnEnd.Length)
+                    // If the writing head is the same as the block to be returned, then we need to make sure
+                    // there's no pending write and that there's no buffered data for the writing head
+                    else if (writingHeadBytesBuffered == 0 && !this.pipeState.IsWritingActive)
                     {
-                        // If the writing head isn't block we're about to return, then we can move to the next one
-                        // and return this block safely
-                        if (writingHead != returnEnd)
-                        {
-                            MoveReturnEndToNextBlock();
-                        }
-                        // If the writing head is the same as the block to be returned, then we need to make sure
-                        // there's no pending write and that there's no buffered data for the writing head
-                        else if (writingHeadBytesBuffered == 0 && !dataflow.IsWritingActive)
-                        {
-                            // Reset the writing head to null if it's the return block and we've consumed everything
-                            writingHead = null;
-                            writingHeadMemory = default;
+                        // Reset the writing head to null if it's the return block and we've consumed everything
+                        writingHead = null;
+                        writingHeadMemory = default;
 
-                            MoveReturnEndToNextBlock();
-                        }
-                        else
-                        {
-                            readHead = consumedSegment;
-                            readHeadIndex = consumedIndex;
-                        }
+                        MoveReturnEndToNextBlock();
                     }
                     else
                     {
@@ -262,47 +232,41 @@ namespace CustomPipelines
                         readHeadIndex = consumedIndex;
                     }
                 }
-
-                // We reset the awaitable to not completed if we've examined everything the producer produced so far
-                // but only if writer is not completed yet
-                if (examinedEverything && !dataflow.IsWritingOver)
+                else
                 {
-                    Debug.Assert(dataflow.IsWritingOver, "PipeWriter.FlushAsync is isn't completed and will deadlock");
-
-                    dataflow.ResumeWriting();
+                    readHead = consumedSegment;
+                    readHeadIndex = consumedIndex;
                 }
-
-                while (returnStart != null && returnStart != returnEnd)
-                {
-                    BufferSegment? next = returnStart.NextSegment;
-                    returnStart.ResetMemory();
-
-                    Debug.Assert(returnStart != readHead, "Returning _readHead segment that's in use!");
-                    Debug.Assert(returnStart != readTail, "Returning _readTail segment that's in use!");
-                    Debug.Assert(returnStart != writingHead, "Returning _writingHead segment that's in use!");
-
-                    if (bufferSegmentPool.Count < options.MaxSegmentPoolSize)
-                    {
-                        bufferSegmentPool.Push(returnStart);
-                    }
-
-                    returnStart = next;
-                }
-
-                dataflow.EndRead();
             }
 
+            // We reset the awaitable to not completed if we've examined everything the producer produced so far
+            // but only if writer is not completed yet
+            if (examinedEverything && !this.pipeState.IsWritingOver)
+            {
+                Debug.Assert(this.pipeState.IsWritingOver,
+                    "PipeWriter.FlushAsync is isn't completed and will deadlock");
+
+                this.pipeState.ResumeWriting();
+            }
+
+            while (returnStart != null && returnStart != returnEnd)
+            {
+                CustomBufferSegment? next = returnStart.NextSegment;
+                returnStart.ResetMemory();
+
+                Debug.Assert(returnStart != readHead, "Returning _readHead segment that's in use!");
+                Debug.Assert(returnStart != readTail, "Returning _readTail segment that's in use!");
+                Debug.Assert(returnStart != writingHead, "Returning _writingHead segment that's in use!");
+
+                customBufferSegmentPool.Push(returnStart);
+
+                returnStart = next;
+            }
+
+            this.pipeState.EndRead();
+
+
             //TrySchedule(WriterScheduler, completionData);
-        }
-
-        public void BeginCompleteReader(Exception exception = null)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void BeginCompleteWriter(Exception exception = null)
-        {
-            throw new NotImplementedException();
         }
 
         public bool TryRead(out StateResult result)
@@ -312,70 +276,64 @@ namespace CustomPipelines
 
         public void CompleteReader(Exception exception = null)
         {
-            lock (SyncObj)
-            {
-                if (dataflow.IsReadingActive)
-                {
-                    dataflow.EndRead();
-                }
 
-                dataflow.FinishReading();
-                dataflow.FinishWriting();       
+            if (this.pipeState.IsReadingActive)
+            {
+                this.pipeState.EndRead();
             }
 
-            if (dataflow.IsWritingOver)
+            this.pipeState.FinishReading();
+            this.pipeState.FinishWriting();
+
+
+            if (this.pipeState.IsWritingOver)
             {
                 CompletePipe();
             }
-
-            callbacks.ReadCompletionCallback.RunCallback();
         }
 
         public void CompleteWriter(Exception exception = null)
         {
-            lock (SyncObj)
-            {
-                CommitUnsynchronized(); // 보류 중인 버퍼 커밋
 
-                dataflow.FinishWriting();
-                dataflow.FinishReading();
-            }
+            CommitUnsynchronized(); // 보류 중인 버퍼 커밋
 
-            if (dataflow.IsReadingOver)
+            this.pipeState.FinishWriting();
+            this.pipeState.FinishReading();
+
+
+            if (this.pipeState.IsReadingOver)
             {
                 CompletePipe();
             }
-
-            callbacks.WriteCompletionCallback.RunCallback();
         }
+
         private void CompletePipe()
         {
-            lock (SyncObj)
+
+            if (disposed)
             {
-                if (disposed)
-                {
-                    return;
-                }
-
-                disposed = true;
-                // Return all segments
-                // if _readHead is null we need to try return _commitHead
-                // because there might be a block allocated for writing
-                BufferSegment? segment = readHead ?? readTail;
-                while (segment != null)
-                {
-                    BufferSegment returnSegment = segment;
-                    segment = segment.NextSegment;
-
-                    returnSegment.ResetMemory();
-                }
-
-                writingHead = null;
-                writingHeadMemory = default;
-                readHead = null;
-                readTail = null;
-                lastExaminedIndex = -1;
+                return;
             }
+
+            disposed = true;
+            // Return all segments
+            // if _readHead is null we need to try return _commitHead
+            // because there might be a block allocated for writing
+            CustomBufferSegment? segment = readHead ?? readTail;
+            while (segment != null)
+            {
+                CustomBufferSegment returnSegment = segment;
+                segment = segment.NextSegment;
+
+                returnSegment.ResetMemory();
+            }
+
+            writingHead = null;
+            writingHeadMemory = default;
+            readHead = null;
+            readTail = null;
+            lastExaminedIndex = -1;
+
         }
 
         public StateResult Flush()
@@ -385,35 +343,34 @@ namespace CustomPipelines
 
         public bool FlushAsync()
         {
-            lock (SyncObj)
+
+            var wasEmpty = CommitUnsynchronized();
+
+            this.pipeState.BeginFlush();
+
+            if (this.pipeState.IsWritingCompleted)
             {
-                var wasEmpty = CommitUnsynchronized();
-
-                dataflow.BeginFlush();
-
-                if (dataflow.IsWritingCompleted)
-                {
-                    UpdateFlushResult();            // cancel 갱신 안하면 계속 취소 상태 (후처리 필요)
-                }
-                else
-                {
-                    // async 처리
-                }
-
-                if (!wasEmpty)
-                {
-                    dataflow.FinishReading();
-                }
-
-                Debug.Assert(dataflow.IsWritingOver || dataflow.IsReadingOver);
+                UpdateFlushResult(); // cancel 갱신 안하면 계속 취소 상태 (후처리 필요)
+            }
+            else
+            {
+                // async 처리
             }
 
-            return dataflow.IsWritingOver;
+            if (!wasEmpty)
+            {
+                this.pipeState.FinishReading();
+            }
+
+            Debug.Assert(this.pipeState.IsWritingOver || this.pipeState.IsReadingOver);
+
+
+            return this.pipeState.IsWritingOver;
         }
 
         internal bool CommitUnsynchronized()
         {
-            dataflow.EndWrite();
+            this.pipeState.EndWrite();
 
             if (unflushedBytes == 0)
             {
@@ -423,7 +380,7 @@ namespace CustomPipelines
 
             // flush를 통해 write 구간의 감소 발생
             Debug.Assert(writingHead != null);
-            writingHead.End += writingHeadBytesBuffered;    
+            writingHead.End += writingHeadBytesBuffered;
 
             // flush를 통해 read 구간의 증가 발생
             readTail = writingHead;
@@ -433,13 +390,13 @@ namespace CustomPipelines
             unconsumedBytes += unflushedBytes;
 
             // Do not reset if reader is complete
-            if (options.PauseWriterThreshold > 0 &&
-                oldLength < options.PauseWriterThreshold &&
-                unconsumedBytes >= options.PauseWriterThreshold &&
-                !dataflow.IsReadingOver)
+            if (this.options.PauseWriterThreshold > 0 &&
+                oldLength < this.options.PauseWriterThreshold &&
+                unconsumedBytes >= this.options.PauseWriterThreshold &&
+                !this.pipeState.IsReadingOver)
             {
                 //writerAwaitable.SetUncompleted();
-                dataflow.ResumeWriting();
+                this.pipeState.ResumeWriting();
             }
 
             unflushedBytes = 0;
@@ -450,19 +407,22 @@ namespace CustomPipelines
 
         public void BlockingFlush()
         {
-            while(FlushAsync()){}
+            while (FlushAsync())
+            {
+            }
         }
+
         public StateResult FlushResult()
         {
-            bool isCanceled = !dataflow.FlushObserved;
-            dataflow.FlushObserved = true;
-            dataflow.FinishWriting();
-            return new StateResult(isCanceled, dataflow.IsReadingOver);
+            bool isCanceled = !this.pipeState.FlushObserved;
+            this.pipeState.FlushObserved = true;
+            this.pipeState.FinishWriting();
+            return new StateResult(isCanceled, this.pipeState.IsReadingOver);
         }
 
         private void UpdateFlushResult()
         {
-            dataflow.EndFlush();
+            this.pipeState.EndFlush();
         }
 
         public long GetPosition()
@@ -472,7 +432,7 @@ namespace CustomPipelines
 
         public Memory<byte> GetWriterMemory(int sizeHint = 0)
         {
-            if (dataflow.IsWritingOver)
+            if (this.pipeState.IsWritingOver)
             {
                 Trace.WriteLine("NoWritingAllowed");
             }
@@ -482,67 +442,68 @@ namespace CustomPipelines
                 Trace.WriteLine("OutOfRange");
             }
 
-            if (!dataflow.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < sizeHint)
+            if (!this.pipeState.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < sizeHint)
             {
-                AllocateWriteHeadSynchronized(sizeHint);        // 세그먼트가 없다면 만들어서 쓰기용 구획을 준비해 두기
+                AllocateWriteHeadSynchronized(sizeHint); // 세그먼트가 없다면 만들어서 쓰기용 구획을 준비해 두기
             }
 
-            return writingHeadMemory;  
+            return writingHeadMemory;
         }
+
         private void AllocateWriteHeadSynchronized(int sizeHint)
         {
-            lock (SyncObj)
+
+            this.pipeState.BeginWrite();
+
+            if (writingHead == null)
             {
-                dataflow.BeginWrite();
+                CustomBufferSegment newSegment = AllocateSegment(sizeHint);
 
-                if (writingHead == null)
+                writingHead = readHead = readTail = newSegment;
+                lastExaminedIndex = 0;
+            }
+            else
+            {
+                int bytesLeftInBuffer = writingHeadMemory.Length;
+
+                if (bytesLeftInBuffer == 0 || bytesLeftInBuffer < sizeHint)
                 {
-                    BufferSegment newSegment = AllocateSegment(sizeHint);
-
-                    writingHead = readHead = readTail = newSegment;
-                    lastExaminedIndex = 0;
-                }
-                else
-                {
-                    int bytesLeftInBuffer = writingHeadMemory.Length;
-
-                    if (bytesLeftInBuffer == 0 || bytesLeftInBuffer < sizeHint)
+                    if (writingHeadBytesBuffered > 0)
                     {
-                        if (writingHeadBytesBuffered > 0)
-                        {
-                            writingHead.End += writingHeadBytesBuffered;
-                            writingHeadBytesBuffered = 0;
-                        }
-
-                        BufferSegment newSegment = AllocateSegment(sizeHint);
-
-                        writingHead.SetNext(newSegment);
-                        writingHead = newSegment;
+                        writingHead.End += writingHeadBytesBuffered;
+                        writingHeadBytesBuffered = 0;
                     }
+
+                    CustomBufferSegment newSegment = AllocateSegment(sizeHint);
+
+                    writingHead.SetNext(newSegment);
+                    writingHead = newSegment;
                 }
             }
+
         }
-        private BufferSegment AllocateSegment(int sizeHint)
+
+        private CustomBufferSegment AllocateSegment(int sizeHint)
         {
             Debug.Assert(sizeHint >= 0);
-            BufferSegment newSegment = CreateSegmentUnsynchronized();
+            CustomBufferSegment newSegment = CreateSegmentUnsynchronized();
 
             MemoryPool<byte>? pool = null;
             int maxSize = -1;
 
-            if (!options.IsDefaultSharedMemoryPool)
+            if (!this.options.IsDefaultSharedMemoryPool)
             {
-                pool = options.Pool;
+                pool = this.options.Pool;
                 maxSize = pool.MaxBufferSize;
             }
 
             if (sizeHint <= maxSize)
             {
-                newSegment.SetOwnedMemory(pool!.Rent(Math.Max(options.MinimumSegmentSize, sizeHint)));
+                newSegment.SetOwnedMemory(pool!.Rent(Math.Max(this.options.MinimumSegmentSize, sizeHint)));
             }
             else
             {
-                int sizeToRequest = Math.Min(int.MaxValue, Math.Max(options.MinimumSegmentSize, sizeHint));
+                int sizeToRequest = Math.Min(int.MaxValue, Math.Max(this.options.MinimumSegmentSize, sizeHint));
                 newSegment.SetOwnedMemory(ArrayPool<byte>.Shared.Rent(sizeToRequest));
             }
 
@@ -550,14 +511,15 @@ namespace CustomPipelines
 
             return newSegment;
         }
-        private BufferSegment CreateSegmentUnsynchronized()
+
+        private CustomBufferSegment CreateSegmentUnsynchronized()
         {
-            if (bufferSegmentPool.TryPop(out BufferSegment? segment))
+            if (customBufferSegmentPool.TryPop(out CustomBufferSegment? segment))
             {
                 return segment;
             }
 
-            return new BufferSegment();
+            return new CustomBufferSegment();
         }
 
 
@@ -565,7 +527,8 @@ namespace CustomPipelines
         {
             throw new NotImplementedException();
         }
-        public Span<byte> GetReaderSpan()           // byte 배열 제공용도
+
+        public Span<byte> GetReaderSpan() // byte 배열 제공용도
         {
             throw new NotImplementedException();
         }
@@ -577,33 +540,35 @@ namespace CustomPipelines
 
         public bool ReadAsync()
         {
-            if (dataflow.IsReadingOver)
+            if (this.pipeState.IsReadingOver)
             {
                 Trace.WriteLine("NoReadingAllowed");
             }
 
-            lock (SyncObj)
-            {
-                UpdateReadResult();
-                //dataflow.ReadObserved = true;   // 조건부
-                //dataflow.EndRead();           // 메커니즘 추가 필요
-            }
+            UpdateReadResult();
+            //this.pipeState.ReadObserved = true;   // 조건부
+            //this.pipeState.EndRead();           // 메커니즘 추가 필요
 
             callbacks.ReadCallback.RunCallback();
 
-            return dataflow.IsReadingOver;
+            return this.pipeState.IsReadingOver;
         }
+
         public StateResult BlockingRead()
         {
-            while (ReadAsync()) { }
+            while (ReadAsync())
+            {
+            }
 
             return ReadResult();
         }
+
         public StateResult ReadResult()
         {
-            var readOnlySequence = readHead == null ? default : 
-                new ReadOnlySequence<byte>(readHead, readHeadIndex, readTail, readTailIndex);
-            return new StateResult(dataflow.ReadObserved, dataflow.IsWritingOver, readOnlySequence);
+            var readOnlySequence = readHead == null
+                ? default
+                : new ReadOnlySequence<byte>(readHead, readHeadIndex, readTail, readTailIndex);
+            return new StateResult(this.pipeState.ReadObserved, this.pipeState.IsWritingOver, readOnlySequence);
         }
 
         public int ReadByte()
@@ -613,13 +578,13 @@ namespace CustomPipelines
 
         private void UpdateReadResult()
         {
-            if (dataflow.ReadObserved)
+            if (this.pipeState.ReadObserved)
             {
-                dataflow.BeginReadTentative();
+                this.pipeState.BeginReadTentative();
             }
             else
             {
-                dataflow.BeginRead();
+                this.pipeState.BeginRead();
             }
         }
 
@@ -628,8 +593,9 @@ namespace CustomPipelines
             throw new NotImplementedException();
         }
 
-        public bool Write(byte[] buffer, int offset=0) =>
+        public bool Write(byte[] buffer, int offset = 0) =>
             WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, buffer.Length));
+
         public bool Write(byte[] buffer, int offset, int count) =>
             WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count));
 
@@ -659,37 +625,35 @@ namespace CustomPipelines
 
         public bool WriteAsync(ReadOnlyMemory<byte> sourceMemory)
         {
-            if (dataflow.IsWritingOver)
+            if (this.pipeState.IsWritingOver)
             {
                 Trace.WriteLine("NoWritingAllowed");
             }
 
-            lock (SyncObj)
+            if (!this.pipeState.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < 0)
             {
-                if (!dataflow.IsWritingActive || writingHeadMemory.Length == 0 || writingHeadMemory.Length < 0)
-                {
-                    AllocateWriteHeadSynchronized(0);
-                }
-
-                if (sourceMemory.Length <= writingHeadMemory.Length)
-                {
-                    sourceMemory.CopyTo(writingHeadMemory);
-
-                    AdvanceCore(sourceMemory.Length);
-                }
-                else
-                {
-                    WriteMultiSegment(sourceMemory.Span);
-                }
-
-                //PrepareFlush(out completionData, out result, cancellationToken);
-                FlushAsync();
+                AllocateWriteHeadSynchronized(0);
             }
+
+            if (sourceMemory.Length <= writingHeadMemory.Length)
+            {
+                sourceMemory.CopyTo(writingHeadMemory);
+
+                AdvanceCore(sourceMemory.Length);
+            }
+            else
+            {
+                WriteMultiSegment(sourceMemory.Span);
+            }
+
+            //PrepareFlush(out completionData, out result, cancellationToken);
+            FlushAsync();
 
             callbacks.WriteCallback.RunCallback();
 
-            return dataflow.IsWritingOver;
+            return this.pipeState.IsWritingOver;
         }
+
         private void WriteMultiSegment(ReadOnlySpan<byte> source)
         {
             Debug.Assert(writingHead != null);
@@ -713,7 +677,7 @@ namespace CustomPipelines
 
                 // This is optimized to use pooled memory. That's why we pass 0 instead of
                 // source.Length
-                BufferSegment newSegment = AllocateSegment(0);
+                CustomBufferSegment newSegment = AllocateSegment(0);
 
                 writingHead.SetNext(newSegment);
                 writingHead = newSegment;
@@ -721,26 +685,35 @@ namespace CustomPipelines
                 destination = writingHeadMemory.Span;
             }
         }
+
         public int BlockingWrite(Stream? obj)
         {
             int bytes = 0;
-            while (WriteAsync(obj)) { }
+            while (WriteAsync(obj))
+            {
+            }
+
             return bytes;
         }
+
         public int BlockingWrite(Object? obj)
         {
             int bytes = 0;
-            while (WriteAsync(obj)) { }
-            return bytes;
-        }
-        public StateResult WriteResult()
-        {
-            if (dataflow.IsReadingOver)
+            while (WriteAsync(obj))
             {
-                return new StateResult(false,true);
             }
 
-            return FlushResult();   // 아직 문제의 여지가 존재
+            return bytes;
+        }
+
+        public StateResult WriteResult()
+        {
+            if (this.pipeState.IsReadingOver)
+            {
+                return new StateResult(false, true);
+            }
+
+            return FlushResult(); // 아직 문제의 여지가 존재
         }
 
         public StateResult WriteEmpty(int bufferSize)
