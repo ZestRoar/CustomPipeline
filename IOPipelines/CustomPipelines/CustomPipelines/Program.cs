@@ -52,7 +52,7 @@ namespace CustomPipelines
                         pipe.Advance(bytesRead);
 
                     }
-                    pipe.Flush();
+                    
 
                 }
 

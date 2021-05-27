@@ -9,6 +9,7 @@ namespace CustomPipelines
 
     public class CustomPipe 
     {
+        // 메모리 운용
         private CustomPipeBuffer customBuffer;
 
         // 세그먼트 크기 등 옵션 지정
@@ -22,8 +23,6 @@ namespace CustomPipelines
 
         private bool disposed;
 
-        
-        
         public long Length => customBuffer.Length;
         public ReadOnlySequence<byte> Buffer => customBuffer.ReadBuffer;
         public CustomPipe() : this(CustomPipeOptions.Default)
@@ -40,7 +39,6 @@ namespace CustomPipelines
             this.pipeState = new CustomPipeState();
         }
 
-
         public void RegisterReadCallback(Action action, bool repeat = true)
         {
             this.callbacks.ReadCallback = new StateCallback(action, repeat);
@@ -51,18 +49,16 @@ namespace CustomPipelines
             this.callbacks.WriteCallback = new StateCallback(action, repeat);
         }
 
-
         private void ResetState()
         {
             this.pipeState.Reset();
             this.customBuffer.Reset();
+            disposed = false;
         }
-
-
 
         public void Advance(int bytes)
         {
-            if (this.pipeState.IsReadingOver)
+            if (this.pipeState.CanRead)
             {
                 return;
             }
@@ -89,11 +85,6 @@ namespace CustomPipelines
 
         public void AdvanceTo(SequencePosition startPosition, SequencePosition endPosition)
         {
-            if (this.pipeState.IsReadingOver)
-            {
-                Trace.WriteLine("No Reading Allowed");
-            }
-
             this.customBuffer.AdvanceReader((CustomBufferSegment?) startPosition.GetObject(), startPosition.GetInteger(),
                 (CustomBufferSegment?) endPosition.GetObject(), endPosition.GetInteger());
             
@@ -117,7 +108,7 @@ namespace CustomPipelines
             this.pipeState.FinishWriting();
 
 
-            if (this.pipeState.IsWritingOver)
+            if (this.pipeState.CanWrite)
             {
                 CompletePipe();
             }
@@ -132,7 +123,7 @@ namespace CustomPipelines
             this.pipeState.FinishReading();
 
 
-            if (this.pipeState.IsReadingOver)
+            if (this.pipeState.CanRead)
             {
                 CompletePipe();
             }
@@ -149,37 +140,9 @@ namespace CustomPipelines
             this.customBuffer.Complete();
         }
 
-        public StateResult Flush()
+        public void Flush()
         {
             CommitUnsynchronized();
-            return FlushResult();
-        }
-
-        public bool FlushAsync()
-        {
-
-            var wasEmpty = CommitUnsynchronized();
-
-            this.pipeState.BeginFlush();
-
-            if (this.pipeState.IsWritingCompleted)
-            {
-                UpdateFlushResult(); // cancel 갱신 안하면 계속 취소 상태 (후처리 필요)
-            }
-            else
-            {
-                // async 처리
-            }
-
-            if (!wasEmpty)
-            {
-                this.pipeState.FinishReading();
-            }
-
-            Debug.Assert(this.pipeState.IsWritingOver || this.pipeState.IsReadingOver);
-
-
-            return this.pipeState.IsWritingOver;
         }
 
         internal bool CommitUnsynchronized()
@@ -197,26 +160,8 @@ namespace CustomPipelines
             return false;
         }
 
-        public void BlockingFlush()
-        {
-            while (FlushAsync())
-            {
-            }
-        }
 
-        public StateResult FlushResult()
-        {
-            bool isCanceled = !this.pipeState.FlushObserved;
-            this.pipeState.FlushObserved = true;
-            this.pipeState.FinishWriting();
-            return new StateResult(isCanceled, this.pipeState.IsReadingOver);
-        }
-
-        private void UpdateFlushResult()
-        {
-            this.pipeState.EndFlush();
-        }
-
+        
         public long GetPosition()
         {
             throw new NotImplementedException();
@@ -224,7 +169,7 @@ namespace CustomPipelines
 
         public Memory<byte> GetWriterMemory(int sizeHint = 0)
         {
-            if (this.pipeState.IsWritingOver)
+            if (this.pipeState.CanNotWrite)
             {
                 Trace.WriteLine("NoWritingAllowed");
             }
@@ -244,82 +189,34 @@ namespace CustomPipelines
         }
 
 
-
-
-        public Span<byte> GetWriterSpan(int sizeHint = 0)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Span<byte> GetReaderSpan() // byte 배열 제공용도
-        {
-            throw new NotImplementedException();
-        }
-
         public bool Read()
         {
-            throw new NotImplementedException();
-        }
-
-        public bool ReadAsync()
-        {
-            if (this.pipeState.IsReadingOver)
+            if (!this.pipeState.CanRead)
             {
-                Trace.WriteLine("NoReadingAllowed");
+                return false;
             }
 
-            UpdateReadResult();
-            //this.pipeState.ReadObserved = true;   // 조건부
-            //this.pipeState.EndRead();           // 메커니즘 추가 필요
+            this.pipeState.BeginRead();
 
-            callbacks.ReadCallback.RunCallback();
+            
 
-            return this.pipeState.IsReadingOver;
+            return true;
         }
-
-        public StateResult BlockingRead()
-        {
-            while (ReadAsync())
-            {
-            }
-
-            return ReadResult();
-        }
-
-        public StateResult ReadResult()
-        {
-            return new StateResult(this.pipeState.ReadObserved, this.pipeState.IsWritingOver);
-        }
-
-        private void UpdateReadResult()
-        {
-            if (this.pipeState.ReadObserved)
-            {
-                this.pipeState.BeginReadTentative();
-            }
-            else
-            {
-                this.pipeState.BeginRead();
-            }
-        }
-
+        
+       
         public void Reset()
         {
-            throw new NotImplementedException();
+            this.CompletePipe();
+            this.ResetState();
         }
 
         public bool Write(byte[] buffer, int offset = 0) =>
-            WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, buffer.Length));
+            Write(new ReadOnlyMemory<byte>(buffer, offset, buffer.Length));
 
         public bool Write(byte[] buffer, int offset, int count) =>
-            WriteAsync(new ReadOnlyMemory<byte>(buffer, offset, count));
+            Write(new ReadOnlyMemory<byte>(buffer, offset, count));
 
-        public bool WriteAsync(Object? obj)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool WriteAsync(Stream? stream)
+        public long WriteAsync(Stream? stream)
         {
             long originalPosition = 0;
             if (stream.CanSeek)
@@ -328,21 +225,24 @@ namespace CustomPipelines
                 stream.Position = 0;
             }
 
-            bool writeActivated = false;
+            long writtenbytes = 0;
             using (var memoryStream = new MemoryStream())
             {
                 stream.CopyTo(memoryStream);
-                writeActivated = WriteAsync(memoryStream.ToArray());
+                if(Write(memoryStream.ToArray()))
+                {
+                    writtenbytes = memoryStream.Length;
+                }
             }
 
-            return writeActivated;
+            return writtenbytes;
         }
 
-        public bool WriteAsync(ReadOnlyMemory<byte> sourceMemory)
+        public bool Write(ReadOnlyMemory<byte> sourceMemory)
         {
-            if (this.pipeState.IsWritingOver)
+            if(this.pipeState.CanNotWrite)
             {
-                Trace.WriteLine("NoWritingAllowed");
+                return false;
             }
 
             if (!this.pipeState.IsWritingActive || this.customBuffer.CheckWriterMemoryInavailable(0))
@@ -361,22 +261,9 @@ namespace CustomPipelines
                 this.customBuffer.WriteMultiSegment(sourceMemory.Span);
             }
 
-            //PrepareFlush(out completionData, out result, cancellationToken);
-            FlushAsync();
+            Flush();
 
-            callbacks.WriteCallback.RunCallback();
-
-            return this.pipeState.IsWritingOver;
-        }
-
-        public StateResult WriteResult()
-        {
-            if (this.pipeState.IsReadingOver)
-            {
-                return new StateResult(false, true);
-            }
-
-            return FlushResult(); // 아직 문제의 여지가 존재
+            return true;
         }
 
         public StateResult WriteEmpty(int bufferSize)

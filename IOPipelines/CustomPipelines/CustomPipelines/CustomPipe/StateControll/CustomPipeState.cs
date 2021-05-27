@@ -41,6 +41,7 @@ namespace CustomPipelines
 
             operationState |= OperationState.Reading;
             readState |= FlowState.Running;
+            writeState |= FlowState.Over;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -65,6 +66,7 @@ namespace CustomPipelines
 
             operationState &= ~(OperationState.Reading | OperationState.ReadingTentative);
             readState &= ~(FlowState.Running);
+            writeState &= ~(FlowState.Over);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -124,8 +126,10 @@ namespace CustomPipelines
         public bool IsReadingCompleted => (readState & (FlowState.Completed | FlowState.Canceled)) != 0;
 
         public bool IsReadingRunning => (readState & FlowState.Running) != 0;
-        public bool IsWritingOver => (writeState & FlowState.Over) != 0;
-        public bool IsReadingOver => (readState & FlowState.Over) != 0;
+        public bool CanWrite => (writeState & FlowState.Over) != 0;
+        public bool CanNotWrite => !CanWrite;
+        public bool CanRead => (readState & FlowState.Over) != 0;
+        public bool CanNotRead => !CanRead;
 
         [Flags]
         internal enum FlowState : byte
