@@ -34,41 +34,43 @@ namespace CustomPipelines
                 SequencePosition? readPosition = null;
 
                 // 프로세스 진행
-                byte[] bytes = new byte[256];
-                int bytesRead = -1;
-                while (bytesRead != 0)
+                void WriteProcess()
                 {
-                    bytesRead = socket.Receive(bytes);
-
-                    if (bytesRead == 0)
+                    byte[] bytes = new byte[256];
+                    int bytesRead = -1;
+                    while (bytesRead != 0)
                     {
-                        break;
+                        bytesRead = socket.Receive(bytes);
+
+                        if (bytesRead == 0)
+                        {
+                            break;
+                        }
+
+                        pipe.Write(bytes, 0, bytesRead);
+
+                        pipe.Advance(bytesRead);
+
                     }
+                    pipe.Flush();
 
-                    pipe.Write(bytes, 0, bytesRead); // 내부에서 Flush 호출
-
-                    pipe.Advance(bytesRead);
-
-                    StateResult result = pipe.FlushResult();
-
-                    if (result.IsCanceled)
-                    {
-                        break;
-                    }
                 }
 
                 while (true)
                 {
-                    var result = pipe.BlockingRead();
-                    var buffer = result.Buffer.Value;
+                    WriteProcess();
 
-                    pipe.AdvanceTo(buffer.Start, buffer.End); // 사용된 데이터 알리기
+                    var buffer = pipe.Buffer;
+
                     readPosition = buffer.PositionOf((byte)'\n');
+                    pipe.AdvanceTo(readPosition.Value);             // 사용된 데이터 알리기
 
-                    if (result.IsCanceled || result.IsCompleted)
+                    readPosition = buffer.PositionOf((byte)'\t');
+                    if(readPosition!=null)
                     {
                         break;
                     }
+
                 }
 
                 pipe.CompleteReader();

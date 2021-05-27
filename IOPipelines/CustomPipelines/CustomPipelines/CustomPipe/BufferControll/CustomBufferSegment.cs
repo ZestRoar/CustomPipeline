@@ -7,10 +7,10 @@ namespace CustomPipelines
 {
     internal sealed class CustomBufferSegment : ReadOnlySequenceSegment<byte>
     {
-        private IMemoryOwner<byte>? _memoryOwner;
-        private byte[]? _array;
-        private CustomBufferSegment? _next;
-        private int _end;
+        private IMemoryOwner<byte>? memoryOwner;
+        private byte[]? array;
+        private CustomBufferSegment? next;
+        private int end;
 
         /// <summary>
         /// 사용 중인 바이트 범위의 끝 지점을 나타낸다. (활성화 범위의 끝)
@@ -19,12 +19,12 @@ namespace CustomPipelines
         /// </summary>
         public int End
         {
-            get => _end;
+            get => this.end;
             set
             {
                 Debug.Assert(value <= AvailableMemory.Length);
 
-                _end = value;
+                this.end = value;
                 Memory = AvailableMemory.Slice(0, value);
             }
         }
@@ -36,50 +36,50 @@ namespace CustomPipelines
         /// </summary>
         public CustomBufferSegment? NextSegment
         {
-            get => _next;
+            get => this.next;
             set
             {
                 Next = value;
-                _next = value;
+                this.next = value;
             }
         }
 
         public void SetOwnedMemory(IMemoryOwner<byte> memoryOwner)
         {
-            _memoryOwner = memoryOwner;
+            this.memoryOwner = memoryOwner;
             AvailableMemory = memoryOwner.Memory;
         }
 
         public void SetOwnedMemory(byte[] arrayPoolBuffer)
         {
-            _array = arrayPoolBuffer;
+            this.array = arrayPoolBuffer;
             AvailableMemory = arrayPoolBuffer;
         }
 
         public void ResetMemory()
         {
-            IMemoryOwner<byte>? memoryOwner = _memoryOwner;
+            IMemoryOwner<byte>? memoryOwner = this.memoryOwner;
             if (memoryOwner != null)
             {
-                _memoryOwner = null;
+                this.memoryOwner = null;
                 memoryOwner.Dispose();
             }
             else
             {
-                Debug.Assert(_array != null);
-                ArrayPool<byte>.Shared.Return(_array);
-                _array = null;
+                Debug.Assert(this.array != null);
+                ArrayPool<byte>.Shared.Return(this.array);
+                this.array = null;
             }
 
             Next = null;
             RunningIndex = 0;
             Memory = default;
-            _next = null;
-            _end = 0;
+            this.next = null;
+            this.end = 0;
             AvailableMemory = default;
         }
 
-        internal object? MemoryOwner => (object?)_memoryOwner ?? _array;
+        internal object? MemoryOwner => (object?)this.memoryOwner ?? this.array;
 
         public Memory<byte> AvailableMemory { get; private set; }
 

@@ -20,7 +20,7 @@ namespace CustomPipelines
         public void Complete(Exception? exception = null) => _pipe.CompleteWriter(exception);
 
 
-        public void CompleteAsync(Exception? exception = null) => _pipe.BeginCompleteWriter(exception);
+        //public void CompleteAsync(Exception? exception = null) => _pipe.BeginCompleteWriter(exception);
 
         public bool FlushAsync() => _pipe.FlushAsync();
 
