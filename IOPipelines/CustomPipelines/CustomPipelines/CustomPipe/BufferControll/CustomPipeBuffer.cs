@@ -44,15 +44,16 @@ namespace CustomPipelines
         }
 
 
-        public long Length => unconsumedBytes;
-        public Memory<byte> Memory => writingHeadMemory;
-        public ReadOnlySequence<byte> ReadBuffer => readHead == null ? default
-               : new ReadOnlySequence<byte>(readHead, readHeadIndex, readTail, readTailIndex);
+        public long Length => this.unconsumedBytes;
+        public Memory<byte> Memory => this.writingHeadMemory;
+        public ReadOnlySequence<byte> ReadBuffer => this.readHead == null ? default
+               : new ReadOnlySequence<byte>(this.readHead, this.readHeadIndex, this.readTail, this.readTailIndex);
         
 
         public bool CheckWritingOutOfRange(int bytes) => (uint)bytes > (uint)this.writingHeadMemory.Length;
-        public bool CheckAnyUnflushedBytes() => this.unflushedBytes == 0;
-        public bool CheckWriterMemoryInavailable(int sizeHint) => writingHeadMemory.Length == 0 || writingHeadMemory.Length < sizeHint;
+        public bool CheckAnyUnflushedBytes() => this.unflushedBytes > 0;
+        public bool CheckAnyReadableBytes() => (this.readHead != this.readTail)||(this.readHeadIndex != this.readTailIndex);
+        public bool CheckWriterMemoryInavailable(int sizeHint) => this.writingHeadMemory.Length == 0 || this.writingHeadMemory.Length < sizeHint;
         public bool WritePending { get; } = false;
         
         public void Reset()
@@ -198,9 +199,9 @@ namespace CustomPipelines
                 CustomBufferSegment? next = returnStart.NextSegment;
                 returnStart.ResetMemory();
 
-                Debug.Assert(returnStart != readHead, "Returning _readHead segment that's in use!");
-                Debug.Assert(returnStart != readTail, "Returning _readTail segment that's in use!");
-                Debug.Assert(returnStart != writingHead, "Returning _writingHead segment that's in use!");
+                Debug.Assert(returnStart != this.readHead, "Returning _readHead segment that's in use!");
+                Debug.Assert(returnStart != this.readTail, "Returning _readTail segment that's in use!");
+                Debug.Assert(returnStart != this.writingHead, "Returning _writingHead segment that's in use!");
 
                 this.customBufferSegmentPool.Push(returnStart);
 
@@ -280,7 +281,7 @@ namespace CustomPipelines
         }
         private CustomBufferSegment CreateSegmentUnsynchronized()
         {
-            if (customBufferSegmentPool.TryPop(out CustomBufferSegment? segment))
+            if (this.customBufferSegmentPool.TryPop(out CustomBufferSegment? segment))
             {
                 return segment;
             }
@@ -296,10 +297,11 @@ namespace CustomPipelines
             this.writingHeadBytesBuffered = 0;
         }
 
+        // 큰 쓰기 작업을 해야할 때 추가적인 세그먼트 할당이 필요하면 진행
         public void WriteMultiSegment(ReadOnlySpan<byte> source)
         {
             Debug.Assert(writingHead != null);
-            Span<byte> destination = writingHeadMemory.Span;
+            Span<byte> destination = this.writingHeadMemory.Span;
 
             while (true)
             {
@@ -314,16 +316,16 @@ namespace CustomPipelines
                 }
 
                 // CommitWritingHead()
-                writingHead.End += writable;
-                writingHeadBytesBuffered = 0;
+                this.writingHead.End += writable;
+                this.writingHeadBytesBuffered = 0;
 
                 // 메모리 풀 사용을 위해 할당만 요청
                 CustomBufferSegment newSegment = AllocateSegment(0);
 
-                writingHead.SetNext(newSegment);
-                writingHead = newSegment;
+                this.writingHead.SetNext(newSegment);
+                this.writingHead = newSegment;
 
-                destination = writingHeadMemory.Span;
+                destination = this.writingHeadMemory.Span;
             }
         }
     }

@@ -11,9 +11,9 @@ namespace CustomPipelinesTest
         public void ResultSequenceCanBeConstructed()
         {
             var buffer = new ReadOnlySequence<byte>(new byte[] { 1, 2, 3 });
-            var result = new StateResult( false, true, buffer);
+            var result = new StateResult( false, true);
 
-            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, result.BufferToArray());
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, buffer.ToArray());
         }
         public void StateResultCanBeConstructed(bool cancelled, bool completed)
         {

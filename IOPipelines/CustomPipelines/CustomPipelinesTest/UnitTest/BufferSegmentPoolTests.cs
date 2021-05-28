@@ -12,12 +12,12 @@ namespace CustomPipelinesTest
     public class BufferSegmentPoolTests : IDisposable
     {
         private readonly TestMemoryPool _pool;
-        private readonly CustomPipe _pipe;
+        private readonly TestCustomPipe _pipe;
 
         public BufferSegmentPoolTests()
         {
             _pool = new TestMemoryPool();
-            _pipe = new CustomPipe(new CustomPipeOptions(_pool, pauseWriterThreshold: 0, resumeWriterThreshold: 0));
+            _pipe = new TestCustomPipe(new CustomPipeOptions(_pool, pauseWriterThreshold: 0, resumeWriterThreshold: 0));
         }
 
         public void Dispose()
@@ -31,11 +31,10 @@ namespace CustomPipelinesTest
         {
             _pipe.WriteEmpty(_pool.MaxBufferSize);
 
-            _pipe.BlockingFlush();
-            StateResult result = _pipe.BlockingRead();
+            _pipe.Flush();
+            _pipe.Read();
 
-            //object oldSegment = result.Buffer.End.GetObject();
-            object oldSegment = _pipe.GetObject();
+            object oldSegment = _pipe.Buffer.End.GetObject();
 
             // 첫번째 세그먼트를 반환해야 함
             //_pipe.Reader.AdvanceTo(result.Buffer.End);
@@ -47,11 +46,11 @@ namespace CustomPipelinesTest
             // 반환된 세그먼트가 사용되야 함
             _pipe.WriteEmpty(_pool.MaxBufferSize);
 
-            _pipe.BlockingFlush();
-            result = _pipe.BlockingRead();
+            _pipe.Flush();
+            _pipe.Read();
 
             //object newSegment = result.Buffer.End.GetObject();
-            object newSegment = _pipe.GetObject();
+            object newSegment = _pipe.Buffer.End.GetObject();
             //_pipe.AdvanceTo(result.Buffer.End);
             _pipe.AdvanceToEnd();
 
@@ -62,6 +61,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void BufferSegmentsPooledUpToThreshold()
         {
+            
             int blockCount = CustomPipe.MaxSegmentPoolSize + 1;
 
             // Write 256 blocks to ensure they get reused
@@ -70,10 +70,10 @@ namespace CustomPipelinesTest
                 _pipe.WriteEmpty(_pool.MaxBufferSize);
             }
 
-            _pipe.BlockingFlush();
-            StateResult result = _pipe.BlockingRead();
+            _pipe.Flush();
+            _pipe.Read();
 
-            List<ReadOnlySequenceSegment<byte>> oldSegments = GetSegments(result);
+            List<ReadOnlySequenceSegment<byte>> oldSegments = GetSegments(_pipe.Buffer);
 
             Assert.AreEqual(blockCount, oldSegments.Count);
 
@@ -85,10 +85,10 @@ namespace CustomPipelinesTest
                 _pipe.WriteEmpty(_pool.MaxBufferSize);
             }
 
-            _pipe.BlockingFlush();
-            result = _pipe.BlockingRead();
+            _pipe.Flush();
+            _pipe.Read();
 
-            List<ReadOnlySequenceSegment<byte>> newSegments = GetSegments(result);
+            List<ReadOnlySequenceSegment<byte>> newSegments = GetSegments(_pipe.Buffer);
 
             Assert.AreEqual(blockCount, newSegments.Count);
 
@@ -105,10 +105,11 @@ namespace CustomPipelinesTest
             CollectionAssert.DoesNotContain(newSegments, oldSegments[256]);
         }
 
-        private static List<ReadOnlySequenceSegment<byte>> GetSegments(StateResult result)
+        
+        private static List<ReadOnlySequenceSegment<byte>> GetSegments(ReadOnlySequence<byte>? result)
         {
             SequenceMarshal.TryGetReadOnlySequenceSegment(
-                           result.Buffer ?? throw new ArgumentNullException(),    
+                           result ?? throw new ArgumentNullException(),
                            out ReadOnlySequenceSegment<byte> start,
                            out int startIndex,
                            out ReadOnlySequenceSegment<byte> end,

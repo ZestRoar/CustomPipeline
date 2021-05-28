@@ -6,29 +6,19 @@ using System.Text;
 using System.Threading.Tasks;
 using CustomPipelines;
 
-namespace CustomPipelinesTest
+namespace CustomPipelines
 {
     internal class TestCustomPipe : CustomPipe
     {
-
-        public int BlockingWrite(Stream? obj)
+        public TestCustomPipe(CustomPipeOptions options) 
         {
-            int bytes = 0;
-            while (WriteAsync(obj))
-            {
-            }
 
-            return bytes;
         }
 
-        public int BlockingWrite(Object? obj)
+        public bool WriteEmpty(int writeBytes)
         {
-            int bytes = 0;
-            while (WriteAsync(obj))
-            {
-            }
-
-            return bytes;
+            return false;
         }
+        
     }
 }

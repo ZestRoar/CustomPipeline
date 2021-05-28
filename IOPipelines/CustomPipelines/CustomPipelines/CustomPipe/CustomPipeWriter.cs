@@ -19,23 +19,13 @@ namespace CustomPipelines
         // 
         public void Complete(Exception? exception = null) => _pipe.CompleteWriter(exception);
 
-
-        //public void CompleteAsync(Exception? exception = null) => _pipe.BeginCompleteWriter(exception);
-
-        public bool FlushAsync() => _pipe.FlushAsync();
-
-        public StateResult FlushResult() => _pipe.FlushResult();
+        public StateResult FlushAsync() => _pipe.Flush();
 
         public void Advance(int bytes) => _pipe.Advance(bytes);
 
         public Memory<byte> GetMemory(int sizeHint = 0) => _pipe.GetWriterMemory(sizeHint);
 
-        public Span<byte> GetSpan(int sizeHint = 0) => _pipe.GetWriterSpan(sizeHint);
-
-        public bool WriteAsync(ReadOnlyMemory<byte> source) => _pipe.WriteAsync(source);
-
-        public StateResult WriteResult() => _pipe.WriteResult();   
-
+        public bool WriteAsync(ReadOnlyMemory<byte> source) => _pipe.Write(source);
 
         protected internal bool CopyFromAsync(Stream source)
         {

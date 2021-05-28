@@ -23,8 +23,7 @@ namespace CustomPipelinesTest
             Pipe.Flush();
             //StateResult readResult = Pipe.Reader.ReadAsync().GetAwaiter().GetResult();
             Pipe.Read();
-            StateResult readResult = Pipe.ReadResult();
-            byte[] data = readResult.BufferToArray();
+            byte[] data = Pipe.Buffer.ToArray();
             Pipe.AdvanceToEnd();
             return data;
         }
@@ -90,7 +89,7 @@ namespace CustomPipelinesTest
             IEnumerable<byte> source = Enumerable.Range(0, memory.Length).Select(i => (byte)i);
             byte[] expectedBytes = source.Concat(source).Concat(source).ToArray();
 
-            Pipe.BlockingWrite(expectedBytes);
+            Pipe.Write(expectedBytes);
             
             Assert.AreEqual(expectedBytes, Read());
         }
@@ -98,7 +97,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void EnsureAllocatesSpan()
         {
-            var span = Pipe.GetWriterSpan(10);
+            var span = Pipe.GetWriterMemory(10).Span;
 
             Assert.IsTrue(span.Length >= 10);
             // 0 byte Flush would not complete the reader so we complete.
@@ -109,10 +108,10 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void SlicesSpanAndAdvancesAfterWrite()
         {
-            int initialLength = Pipe.GetWriterSpan(3).Length;
+            int initialLength = Pipe.GetWriterMemory(3).Span.Length;
 
             Pipe.Write(new byte[] { 1, 2, 3 });
-            Span<byte> span = Pipe.GetWriterSpan();
+            Span<byte> span = Pipe.GetWriterMemory().Span;
 
             Assert.AreEqual(initialLength - 3, span.Length);
             Assert.AreEqual(new byte[] { 1, 2, 3 }, Read());
@@ -123,11 +122,10 @@ namespace CustomPipelinesTest
         {
             var data = new byte[length];
             new Random(length).NextBytes(data);
-            Pipe.BlockingWrite(data);
-            Pipe.BlockingRead();
-            StateResult result = Pipe.ReadResult();
-            ReadOnlySequence<byte>? input = result.Buffer;
-            Assert.AreEqual(data, result.BufferToArray());
+            Pipe.Write(data);
+            Pipe.Read();
+            ReadOnlySequence<byte>? input = Pipe.Buffer;
+            Assert.AreEqual(data, Pipe.Buffer.ToArray());
             Pipe.AdvanceToEnd();
         }
 
@@ -136,7 +134,7 @@ namespace CustomPipelinesTest
         {
             Pipe.GetWriterMemory(0);
             Pipe.Advance(0); // doing nothing, the hard way
-            Pipe.BlockingFlush();
+            Pipe.Flush();
         }
 
         [TestMethod]
@@ -166,14 +164,14 @@ namespace CustomPipelinesTest
             
             for (int i = 0; i < bytes.Length; i++)
             {
-                Pipe.GetWriterSpan()[0] = bytes[i];
+                Pipe.GetWriterMemory().Span[0] = bytes[i];
                 Pipe.Advance(1);
             }
 
-            Pipe.BlockingFlush(); 
+            Pipe.Flush(); 
             Pipe.CompleteWriter();
-            StateResult readResult = Pipe.BlockingRead();
-            Assert.AreEqual(bytes, readResult.BufferToArray());
+            Pipe.Read();
+            Assert.AreEqual(bytes, Pipe.Buffer.ToArray());
             pipe.AdvanceToEnd();
 
             pipe.CompleteReader();
@@ -191,10 +189,10 @@ namespace CustomPipelinesTest
                 Pipe.Advance(1);
             }
 
-            Pipe.BlockingFlush(); 
+            Pipe.Flush(); 
             Pipe.CompleteWriter();
-            StateResult readResult = Pipe.BlockingRead();
-            Assert.AreEqual(bytes, readResult.BufferToArray());
+            Pipe.Read();
+            Assert.AreEqual(bytes, Pipe.Buffer.ToArray());
             pipe.AdvanceToEnd();
 
             pipe.CompleteReader();
@@ -218,7 +216,7 @@ namespace CustomPipelinesTest
                 {
                     var buffer = new byte[10000000];
                     //await pipe.Writer.WriteAsync(buffer);
-                    Pipe.BlockingWrite(buffer);
+                    Pipe.Write(buffer);
                 }
             }
             catch (InvalidOperationException)
@@ -240,7 +238,7 @@ namespace CustomPipelinesTest
             byte[] writeBuffer = new byte[100];
             for (var i = 0; i < 10000; i++)
             {
-                pipe.BlockingWrite(writeBuffer);
+                pipe.Write(writeBuffer);
             }
 
             Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
@@ -257,7 +255,7 @@ namespace CustomPipelinesTest
             {
                 var mem = pipe.GetWriterMemory();
                 pipe.Advance(mem.Length);
-                pipe.BlockingFlush();
+                pipe.Flush();
             }
 
             Assert.AreEqual(1, pool.CurrentlyRentedBlocks);

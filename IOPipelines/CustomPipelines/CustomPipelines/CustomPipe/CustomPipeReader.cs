@@ -17,7 +17,7 @@ namespace CustomPipelines
 
         public bool TryRead(out StateResult result) => _pipe.TryRead(out result);
 
-        public bool ReadAsync() => _pipe.ReadAsync();
+        public bool ReadAsync() => _pipe.Read();
 
         public void AdvanceTo(SequencePosition consumed) => _pipe.AdvanceTo(consumed);
 
@@ -25,7 +25,5 @@ namespace CustomPipelines
 
         public void Complete(Exception? exception = null) => _pipe.CompleteReader(exception);
         
-        public StateResult GetResult(short token) => _pipe.ReadResult();
-
     }
 }

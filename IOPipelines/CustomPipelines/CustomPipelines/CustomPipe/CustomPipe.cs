@@ -53,7 +53,7 @@ namespace CustomPipelines
         {
             this.pipeState.Reset();
             this.customBuffer.Reset();
-            disposed = false;
+            this.disposed = false;
         }
 
         public void Advance(int bytes)
@@ -98,58 +98,45 @@ namespace CustomPipelines
 
         public void CompleteReader(Exception exception = null)
         {
-
-            if (this.pipeState.IsReadingActive)
-            {
-                this.pipeState.EndRead();
-            }
-
-            this.pipeState.FinishReading();
-            this.pipeState.FinishWriting();
-
+            this.pipeState.EndRead();
 
             if (this.pipeState.CanWrite)
             {
-                CompletePipe();
+                this.CompletePipe();
             }
         }
 
         public void CompleteWriter(Exception exception = null)
         {
-
-            CommitUnsynchronized(); // 보류 중인 버퍼 커밋
-
-            this.pipeState.FinishWriting();
-            this.pipeState.FinishReading();
-
+            this.CommitUnsynchronized(); // 보류 중인 버퍼 커밋
 
             if (this.pipeState.CanRead)
             {
-                CompletePipe();
+                this.CompletePipe();
             }
         }
 
         private void CompletePipe()
         {
-            if (disposed)
+            if (this.disposed)
             {
                 return;
             }
 
-            disposed = true;
+            this.disposed = true;
             this.customBuffer.Complete();
         }
 
-        public void Flush()
+        public StateResult Flush()
         {
-            CommitUnsynchronized();
+            return new StateResult(false, CommitUnsynchronized());
         }
 
         internal bool CommitUnsynchronized()
         {
             this.pipeState.EndWrite();
 
-            if (this.customBuffer.CheckAnyUnflushedBytes())
+            if (!this.customBuffer.CheckAnyUnflushedBytes())
             {
                 // 더이상 쓸 데이터가 없음
                 return true;
@@ -158,13 +145,6 @@ namespace CustomPipelines
             this.customBuffer.CommitCore();
 
             return false;
-        }
-
-
-        
-        public long GetPosition()
-        {
-            throw new NotImplementedException();
         }
 
         public Memory<byte> GetWriterMemory(int sizeHint = 0)
@@ -179,26 +159,24 @@ namespace CustomPipelines
                 Trace.WriteLine("OutOfRange");
             }
 
-            if (!this.pipeState.IsWritingActive || this.customBuffer.CheckWriterMemoryInavailable(sizeHint))
+            if (!this.pipeState.IsWritingRunning || this.customBuffer.CheckWriterMemoryInavailable(sizeHint))
             {
                 this.pipeState.BeginWrite();
                 this.customBuffer.AllocateWriteHeadSynchronized(sizeHint); // 세그먼트가 없다면 만들어서 쓰기용 구획을 준비해 두기
             }
-
+            
             return this.customBuffer.Memory;
         }
 
 
         public bool Read()
         {
-            if (!this.pipeState.CanRead)
+            if (this.pipeState.CanNotRead || !this.customBuffer.CheckAnyReadableBytes())    
             {
                 return false;
             }
 
             this.pipeState.BeginRead();
-
-            
 
             return true;
         }
@@ -215,6 +193,8 @@ namespace CustomPipelines
 
         public bool Write(byte[] buffer, int offset, int count) =>
             Write(new ReadOnlyMemory<byte>(buffer, offset, count));
+
+        public bool Write(Span<byte> span) => Write(span.ToArray());
 
         public long WriteAsync(Stream? stream)
         {
@@ -245,7 +225,7 @@ namespace CustomPipelines
                 return false;
             }
 
-            if (!this.pipeState.IsWritingActive || this.customBuffer.CheckWriterMemoryInavailable(0))
+            if (!this.pipeState.IsWritingRunning || this.customBuffer.CheckWriterMemoryInavailable(0))
             {
                 this.customBuffer.AllocateWriteHeadSynchronized(0);
             }
@@ -266,9 +246,5 @@ namespace CustomPipelines
             return true;
         }
 
-        public StateResult WriteEmpty(int bufferSize)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

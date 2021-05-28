@@ -28,10 +28,8 @@ namespace CustomPipelinesTest
         {
             var source = new byte[] { 1, 2, 3 };
 
-            _pipe.BlockingWrite(source);
-            _pipe.BlockingRead();
-
-            StateResult result = _pipe.ReadResult();
+            _pipe.Write(source);
+            _pipe.Read();
 
             Assert.AreEqual(source, _pipe.GetReaderSpan().ToArray());
             _pipe.AdvanceToEnd();
@@ -41,10 +39,8 @@ namespace CustomPipelinesTest
 
             _pipe.Reset();
 
-            _pipe.BlockingWrite(source);
-            _pipe.BlockingRead();
-
-            result = _pipe.ReadResult();
+            _pipe.Write(source);
+            _pipe.Read();
 
             Assert.AreEqual(source, _pipe.GetReaderSpan().ToArray());
             _pipe.AdvanceToEnd();
