@@ -19,6 +19,11 @@ namespace CustomPipelines
         {
             return false;
         }
+
+        public Span<byte> GetReaderSpan()
+        {
+            return new Span<byte>();
+        }
         
     }
 }

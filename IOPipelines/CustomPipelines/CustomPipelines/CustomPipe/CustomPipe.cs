@@ -1,19 +1,18 @@
 ﻿using System;
 using System.Buffers;
 using System.Diagnostics;
-using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("CustomPipelinesTest")]
 
 namespace CustomPipelines
 {
-
-    public class CustomPipe 
+    internal class CustomPipe
     {
+        internal const int MaxSegmentPoolSize = 256;
         // 메모리 운용
         private CustomPipeBuffer customBuffer;
-
-        // 세그먼트 크기 등 옵션 지정
-        private readonly CustomPipeOptions options;
 
         // 여러 콜백 등록 용도
         private CallbackManager callbacks;
@@ -32,8 +31,7 @@ namespace CustomPipelines
 
         public CustomPipe(CustomPipeOptions options)
         {
-            this.options = options ?? CustomPipeOptions.Default;
-            this.customBuffer = new CustomPipeBuffer(this.options);
+            this.customBuffer = new CustomPipeBuffer(options ?? CustomPipeOptions.Default);
 
             this.callbacks = new CallbackManager();
             this.pipeState = new CustomPipeState();
@@ -47,13 +45,6 @@ namespace CustomPipelines
         public void RegisterWriteCallback(Action action, bool repeat = true)
         {
             this.callbacks.WriteCallback = new StateCallback(action, repeat);
-        }
-
-        private void ResetState()
-        {
-            this.pipeState.Reset();
-            this.customBuffer.Reset();
-            this.disposed = false;
         }
 
         public void Advance(int bytes)
@@ -90,43 +81,6 @@ namespace CustomPipelines
             
             this.pipeState.EndRead();
         }
-
-        public bool TryRead(out StateResult result)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CompleteReader(Exception exception = null)
-        {
-            this.pipeState.EndRead();
-
-            if (this.pipeState.CanWrite)
-            {
-                this.CompletePipe();
-            }
-        }
-
-        public void CompleteWriter(Exception exception = null)
-        {
-            this.CommitUnsynchronized(); // 보류 중인 버퍼 커밋
-
-            if (this.pipeState.CanRead)
-            {
-                this.CompletePipe();
-            }
-        }
-
-        private void CompletePipe()
-        {
-            if (this.disposed)
-            {
-                return;
-            }
-
-            this.disposed = true;
-            this.customBuffer.Complete();
-        }
-
         public StateResult Flush()
         {
             return new StateResult(false, CommitUnsynchronized());
@@ -168,7 +122,54 @@ namespace CustomPipelines
             return this.customBuffer.Memory;
         }
 
+        public bool Write(byte[] buffer, int offset = 0) =>
+            Write(new ReadOnlyMemory<byte>(buffer, offset, buffer.Length));
 
+        public bool Write(byte[] buffer, int offset, int count) =>
+            Write(new ReadOnlyMemory<byte>(buffer, offset, count));
+
+        public bool Write(Span<byte> span) => Write(span.ToArray());
+
+        public bool Write(ReadOnlyMemory<byte> sourceMemory)
+        {
+            if (this.pipeState.CanNotWrite)
+            {
+                return false;
+            }
+
+            if (!this.pipeState.IsWritingRunning || this.customBuffer.CheckWriterMemoryInavailable(0))
+            {
+                this.customBuffer.AllocateWriteHeadSynchronized(0);
+            }
+
+            if (sourceMemory.Length <= this.customBuffer.Memory.Length)
+            {
+                sourceMemory.CopyTo(this.customBuffer.Memory);
+
+                this.customBuffer.AdvanceCore(sourceMemory.Length);
+            }
+            else
+            {
+                this.customBuffer.WriteMultiSegment(sourceMemory.Span);     // 대용량 쓰기
+            }
+
+            Flush();
+
+            return true;
+        }
+
+        public bool TryRead(out StateResult result)
+        {
+            if (this.pipeState.IsReadingCompleted || this.customBuffer.Length>0)
+            {
+                result = new StateResult(false, this.pipeState.IsWritingCompleted);
+                return true;
+            }
+
+            this.pipeState.BeginRead(); // tentative
+            result = default;
+            return false;   
+        }
         public bool Read()
         {
             if (this.pipeState.CanNotRead || !this.customBuffer.CheckAnyReadableBytes())    
@@ -187,63 +188,42 @@ namespace CustomPipelines
             this.CompletePipe();
             this.ResetState();
         }
-
-        public bool Write(byte[] buffer, int offset = 0) =>
-            Write(new ReadOnlyMemory<byte>(buffer, offset, buffer.Length));
-
-        public bool Write(byte[] buffer, int offset, int count) =>
-            Write(new ReadOnlyMemory<byte>(buffer, offset, count));
-
-        public bool Write(Span<byte> span) => Write(span.ToArray());
-
-        public long WriteAsync(Stream? stream)
+        public void CompleteReader(Exception exception = null)
         {
-            long originalPosition = 0;
-            if (stream.CanSeek)
-            {
-                originalPosition = stream.Position;
-                stream.Position = 0;
-            }
+            this.pipeState.EndRead();
 
-            long writtenbytes = 0;
-            using (var memoryStream = new MemoryStream())
+            if (this.pipeState.CanWrite)
             {
-                stream.CopyTo(memoryStream);
-                if(Write(memoryStream.ToArray()))
-                {
-                    writtenbytes = memoryStream.Length;
-                }
+                this.CompletePipe();
             }
-
-            return writtenbytes;
         }
 
-        public bool Write(ReadOnlyMemory<byte> sourceMemory)
+        public void CompleteWriter(Exception exception = null)
         {
-            if(this.pipeState.CanNotWrite)
+            this.CommitUnsynchronized(); // 보류 중인 버퍼 커밋
+
+            if (this.pipeState.CanRead)
             {
-                return false;
+                this.CompletePipe();
+            }
+        }
+
+        private void CompletePipe()
+        {
+            if (this.disposed)
+            {
+                return;
             }
 
-            if (!this.pipeState.IsWritingRunning || this.customBuffer.CheckWriterMemoryInavailable(0))
-            {
-                this.customBuffer.AllocateWriteHeadSynchronized(0);
-            }
+            this.disposed = true;
+            this.customBuffer.Complete();
+        }
 
-            if (sourceMemory.Length <= this.customBuffer.Memory.Length)
-            {
-                sourceMemory.CopyTo(this.customBuffer.Memory);
-
-                this.customBuffer.AdvanceCore(sourceMemory.Length);
-            }
-            else
-            {
-                this.customBuffer.WriteMultiSegment(sourceMemory.Span);
-            }
-
-            Flush();
-
-            return true;
+        private void ResetState()
+        {
+            this.pipeState.Reset();
+            this.customBuffer.Reset();
+            this.disposed = false;
         }
 
     }

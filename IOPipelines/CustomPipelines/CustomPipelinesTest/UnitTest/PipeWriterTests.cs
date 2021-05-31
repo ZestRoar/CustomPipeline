@@ -24,7 +24,7 @@ namespace CustomPipelinesTest
             //StateResult readResult = Pipe.Reader.ReadAsync().GetAwaiter().GetResult();
             Pipe.Read();
             byte[] data = Pipe.Buffer.ToArray();
-            Pipe.AdvanceToEnd();
+            //Pipe.AdvanceToEnd();
             return data;
         }
 

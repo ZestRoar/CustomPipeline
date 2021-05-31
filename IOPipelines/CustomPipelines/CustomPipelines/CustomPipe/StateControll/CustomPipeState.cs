@@ -1,14 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Runtime.Intrinsics.X86;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CustomPipelines
 {
-    class CustomPipeState
+    internal class CustomPipeState
     {
         private FlowState readState;
         private FlowState writeState;
@@ -16,7 +11,7 @@ namespace CustomPipelines
         public CustomPipeState()
         {
             readState = FlowState.None;
-            writeState = FlowState.None;
+            writeState = FlowState.Over;
         }
 
         public void Reset()

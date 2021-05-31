@@ -102,3 +102,4 @@ C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipe
 C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelinesTest\obj\Debug\net5.0\ref\CustomPipelinesTest.dll
 C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelinesTest\obj\Debug\net5.0\CustomPipelinesTest.pdb
 C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelinesTest\obj\Debug\net5.0\CustomPipelinesTest.genruntimeconfig.cache
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelinesTest\bin\Debug\net5.0\System.IO.Pipelines.dll

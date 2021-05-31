@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Buffers;
-using System.IO;
-using System.Threading;
 
 namespace CustomPipelines
 {
-    public class CustomPipeReader
+    internal class CustomPipeReader
     {
         //private PipeReaderStream? _stream;
         private readonly CustomPipe _pipe;

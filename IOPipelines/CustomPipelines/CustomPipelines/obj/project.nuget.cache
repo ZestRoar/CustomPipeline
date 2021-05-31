@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "cAW4N3pEDu4ktn5TMAW9x/J47Z0pu+yWVy6zHJ6tIcBL3WgzT1j1/rRIa5VtkrXzPJe440ws1SJSyBF/LGP7Rw==",
+  "dgSpecHash": "dQqdbassxMd8oXafBNCm27EyZfTlnQWHwBSW1VitARMGSYi66usXWaA4JdyxQ4m900FPRFD/pUJgmeLAJJguTw==",
   "success": true,
-  "projectFilePath": "C:\\GitRepos\\CustomPipeline\\IOPipelines\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
+  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\CustomPipelines\\CustomPipelines\\CustomPipelines.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\Administrator\\.nuget\\packages\\system.io.pipelines\\5.0.1\\system.io.pipelines.5.0.1.nupkg.sha512"
+    "C:\\Users\\doggyfoot\\.nuget\\packages\\system.io.pipelines\\5.0.1\\system.io.pipelines.5.0.1.nupkg.sha512"
   ],
   "logs": []
 }

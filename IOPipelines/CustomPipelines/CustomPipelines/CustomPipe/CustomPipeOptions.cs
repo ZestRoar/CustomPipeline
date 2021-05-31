@@ -1,14 +1,9 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.IO.Pipes;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CustomPipelines
 {
-    public class CustomPipeOptions
+    internal class CustomPipeOptions
     {
         private const int DefaultMinimumSegmentSize = 4096;
         private const int DefaultPauseWriterThreshold = 65536;
@@ -16,7 +11,8 @@ namespace CustomPipelines
         public static CustomPipeOptions Default { get; } = new CustomPipeOptions();
 
         public CustomPipeOptions(System.Buffers.MemoryPool<byte>? pool = null,
-            long pauseWriterThreshold = (long)DefaultPauseWriterThreshold, long resumeWriterThreshold = (long)(DefaultPauseWriterThreshold >> 1),
+            long pauseWriterThreshold = (long)DefaultPauseWriterThreshold,
+            long resumeWriterThreshold = (long)(DefaultPauseWriterThreshold >> 1),
             int minimumSegmentSize = DefaultMinimumSegmentSize)
         {
             if (pauseWriterThreshold < 0)
@@ -36,13 +32,13 @@ namespace CustomPipelines
         }
 
         /// <summary>Flush 쓰기 작업 중단 바이트</summary>
-        public long PauseWriterThreshold { get; }
+        public long PauseWriterThreshold { get; } = DefaultPauseWriterThreshold;
 
         /// <summary>Flush 쓰기 작업 재개 바이트</summary>
         public long ResumeWriterThreshold { get; }
 
         /// <summary>요청받은 세그먼트 최소 사이즈</summary>
-        public int MinimumSegmentSize { get; }
+        public int MinimumSegmentSize { get; } = DefaultMinimumSegmentSize;
 
         /// <summary>버퍼 관리를 위한 메모리풀을 참조</summary>
         public MemoryPool<byte> Pool { get; }

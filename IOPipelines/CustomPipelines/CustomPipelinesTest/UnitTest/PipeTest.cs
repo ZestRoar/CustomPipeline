@@ -13,7 +13,7 @@ namespace CustomPipelinesTest
 
         private readonly TestMemoryPool _pool;
 
-        protected CustomPipe Pipe;
+        internal CustomPipe Pipe;
 
         public PipeTest(int pauseWriterThreshold = MaximumSizeHigh, int resumeWriterThreshold = MaximumSizeLow)
         {

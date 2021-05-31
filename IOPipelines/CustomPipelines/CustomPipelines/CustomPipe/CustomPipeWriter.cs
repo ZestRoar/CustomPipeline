@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CustomPipelines
 {
-    public class CustomPipeWriter
+    internal class CustomPipeWriter
     {
         //private PipeWriterStream? _stream;
         private readonly CustomPipe _pipe;
@@ -27,15 +23,5 @@ namespace CustomPipelines
 
         public bool WriteAsync(ReadOnlyMemory<byte> source) => _pipe.Write(source);
 
-        protected internal bool CopyFromAsync(Stream source)
-        {
-            while (true)
-            {
-                Memory<byte> buffer = GetMemory();
-                //
-
-
-            }
-        }
     }
 }

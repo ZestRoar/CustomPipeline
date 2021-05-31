@@ -32,3 +32,5 @@ C:\GitRepos\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug
 C:\GitRepos\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\ref\CustomPipelines.dll
 C:\GitRepos\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.pdb
 C:\GitRepos\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.genruntimeconfig.cache
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\bin\Debug\net5.0\System.IO.Pipelines.dll
+C:\Users\doggyfoot\Desktop\CustomPipeline\IOPipelines\CustomPipelines\CustomPipelines\obj\Debug\net5.0\CustomPipelines.csproj.CopyComplete
