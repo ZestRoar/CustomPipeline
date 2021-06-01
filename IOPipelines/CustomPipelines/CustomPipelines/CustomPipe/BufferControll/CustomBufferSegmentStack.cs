@@ -9,7 +9,7 @@ namespace CustomPipelines
     {
         private SegmentAsValueType[] array;
         private int size;
-        private int maxSize;
+        private readonly int maxSize;
 
         public CustomBufferSegmentStack(CustomPipeOptions pipeOptions)
         {
@@ -18,21 +18,20 @@ namespace CustomPipelines
             this.maxSize = pipeOptions.MaxSegmentPoolSize;
         }
         
-        public bool TryPop([NotNullWhen(true)] out CustomBufferSegment? result)     // 세그먼트 하나 할당 (풀에서 하나 제거)
+        public CustomBufferSegment TryPop()     // 세그먼트 하나 할당 (풀에서 하나 제거)
         {
-            int size = this.size - 1;
-            SegmentAsValueType[] array = this.array;
+            var stackSize = this.size - 1;
+            var arraySegment = this.array;
 
-            if ((uint)size >= (uint)array.Length)
+            if ((uint)stackSize >= (uint)arraySegment.Length)
             {
-                result = default;
-                return false;
+                return new CustomBufferSegment();
             }
 
-            this.size = size;
-            result = array[size];
-            array[size] = default;
-            return true;
+            this.size = stackSize;
+            var result = arraySegment[stackSize];
+            arraySegment[stackSize] = default;
+            return result;
         }
 
         public bool Push(CustomBufferSegment item)          // 세그먼트 반환
@@ -43,13 +42,13 @@ namespace CustomPipelines
                 return false;
             }
 
-            int size = this.size;
-            SegmentAsValueType[] array = this.array;
+            var stackSize = this.size;
+            var arraySegment = this.array;
 
-            if ((uint)size < (uint)array.Length)
+            if ((uint)stackSize < (uint)arraySegment.Length)
             {
-                array[size] = item;
-                this.size = size + 1;
+                arraySegment[stackSize] = item;
+                this.size = stackSize + 1;
             }
             else
             {

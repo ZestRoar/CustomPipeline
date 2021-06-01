@@ -11,7 +11,7 @@ namespace CustomPipelinesTest
         public PipeResetTests()
         {
             _pool = new TestMemoryPool();
-            _pipe = new TestCustomPipe(new CustomPipeOptions(_pool));
+            _pipe = new TestCustomPipe(_pool, new CustomPipeOptions());
         }
         public void Dispose()
         {

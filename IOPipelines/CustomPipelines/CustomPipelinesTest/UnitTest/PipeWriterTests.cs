@@ -84,7 +84,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public async Task CanWriteOverTheBlockLength()
         {
-            Memory<byte> memory = Pipe.GetWriterMemory();
+            Memory<byte> memory = Pipe.GetWriterMemory().Value;
            
             IEnumerable<byte> source = Enumerable.Range(0, memory.Length).Select(i => (byte)i);
             byte[] expectedBytes = source.Concat(source).Concat(source).ToArray();
@@ -97,7 +97,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void EnsureAllocatesSpan()
         {
-            var span = Pipe.GetWriterMemory(10).Span;
+            var span = Pipe.GetWriterMemory(10).Value.Span;
 
             Assert.IsTrue(span.Length >= 10);
             // 0 byte Flush would not complete the reader so we complete.
@@ -108,10 +108,10 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void SlicesSpanAndAdvancesAfterWrite()
         {
-            int initialLength = Pipe.GetWriterMemory(3).Span.Length;
+            int initialLength = Pipe.GetWriterMemory(3).Value.Span.Length;
 
             Pipe.Write(new byte[] { 1, 2, 3 });
-            Span<byte> span = Pipe.GetWriterMemory().Span;
+            Span<byte> span = Pipe.GetWriterMemory().Value.Span;
 
             Assert.AreEqual(initialLength - 3, span.Length);
             Assert.AreEqual(new byte[] { 1, 2, 3 }, Read());
@@ -146,7 +146,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void ThrowsOnAdvanceOverMemorySize()
         {
-            Memory<byte> buffer = Pipe.GetWriterMemory(1);
+            Memory<byte> buffer = Pipe.GetWriterMemory(1).Value;
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => Pipe.Advance(buffer.Length + 1));
         }
 
@@ -160,11 +160,11 @@ namespace CustomPipelinesTest
         public void WritesUsingGetSpanWorks()
         {
             var bytes = Encoding.ASCII.GetBytes("abcdefghijklmnopqrstuvwzyz");
-            var pipe = new CustomPipe(new CustomPipeOptions(pool: new HeapBufferPool(), minimumSegmentSize: 1));
+            var pipe = new TestCustomPipe(new HeapBufferPool(), new CustomPipeOptions(minimumSegmentSize: 1));
             
             for (int i = 0; i < bytes.Length; i++)
             {
-                Pipe.GetWriterMemory().Span[0] = bytes[i];
+                Pipe.GetWriterMemory().Value.Span[0] = bytes[i];
                 Pipe.Advance(1);
             }
 
@@ -181,11 +181,11 @@ namespace CustomPipelinesTest
         public void WritesUsingGetMemoryWorks()
         {
             var bytes = Encoding.ASCII.GetBytes("abcdefghijklmnopqrstuvwzyz");
-            var pipe = new CustomPipe(new CustomPipeOptions(pool: new HeapBufferPool(), minimumSegmentSize: 1));
+            var pipe = new TestCustomPipe(new HeapBufferPool(), new CustomPipeOptions(minimumSegmentSize: 1));
            
             for (int i = 0; i < bytes.Length; i++)
             {
-                Pipe.GetWriterMemory().Span[0] = bytes[i];
+                Pipe.GetWriterMemory().Value.Span[0] = bytes[i];
                 Pipe.Advance(1);
             }
 
@@ -232,7 +232,7 @@ namespace CustomPipelinesTest
         public void WriteAsyncWithACompletedReaderNoops()
         {
             var pool = new DisposeTrackingBufferPool();
-            var pipe = new CustomPipe(new CustomPipeOptions(pool));
+            var pipe = new TestCustomPipe(pool, new CustomPipeOptions());
             pipe.CompleteReader();
 
             byte[] writeBuffer = new byte[100];
@@ -248,13 +248,13 @@ namespace CustomPipelinesTest
         public void GetMemoryFlushWithACompletedReaderNoops()
         {
             var pool = new DisposeTrackingBufferPool();
-            var pipe = new CustomPipe(new CustomPipeOptions(pool));
+            var pipe = new TestCustomPipe(pool, new CustomPipeOptions());
             pipe.CompleteReader();
 
             for (var i = 0; i < 10000; i++)
             {
                 var mem = pipe.GetWriterMemory();
-                pipe.Advance(mem.Length);
+                pipe.Advance(mem.Value.Length);
                 pipe.Flush();
             }
 

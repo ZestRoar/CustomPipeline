@@ -29,7 +29,7 @@ namespace CustomPipelines
 
                 CustomPipe pipe = new CustomPipe();
                 pipe.RegisterWriteCallback(writeAction);
-                pipe.RegisterReadCallback(readAction);
+                pipe.RegisterReadCallback(readAction, 0);
 
                 SequencePosition? readPosition = null;
 

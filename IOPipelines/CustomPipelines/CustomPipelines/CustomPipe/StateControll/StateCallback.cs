@@ -4,35 +4,36 @@ namespace CustomPipelines
 {
     internal class StateCallback
     {
+#nullable enable
+
         private Action? completeAction;
         private bool hangOnContaining;
 
-        public StateCallback(bool repeatable = true)
+        public bool ActionNotExist => completeAction == null;
+
+        public StateCallback(bool repeatable = false)
         {
-            completeAction = null;
-            hangOnContaining = true;
+            this.completeAction = null;
+            this.hangOnContaining = repeatable;
         }
-        public StateCallback(Action? onContinue, bool repeatable = true)
+        public StateCallback(Action? onContinue, bool repeatable = false)
         {
-            completeAction = onContinue;
-            hangOnContaining = repeatable;
+            this.completeAction = onContinue;
+            this.hangOnContaining = repeatable;
         }
 
-        public void SetCallback(Action? onContinue, bool repeatable = true)
+        public void SetCallback(Action? onContinue, bool repeatable = false)
         {
-            completeAction = onContinue;
-            hangOnContaining = repeatable;
+            this.completeAction = onContinue;
+            this.hangOnContaining = repeatable;
         }
         public void RunCallback()
         {
-            if (completeAction != null)
-            {
-                completeAction.Invoke();
-            }
+            completeAction?.Invoke();
 
-            if (hangOnContaining == false)
+            if (this.hangOnContaining == false) // 콜백이 바뀌지 않는 경우 지정
             {
-                completeAction = null;
+                this.completeAction = null;
             }
         }
 

@@ -12,17 +12,14 @@ namespace CustomPipelines
     {
         internal const int MaxSegmentPoolSize = 256;
         // 메모리 운용
-        private CustomPipeBuffer customBuffer;
-
-        // 여러 콜백 등록 용도
-        private CallbackManager callbacks;
+        private readonly CustomPipeBuffer customBuffer;
 
         // 파이프 상태 체크 용
-        private CustomPipeState pipeState;
+        private readonly CustomPipeState pipeState;
 
         private bool disposed;
 
-        public long Length => customBuffer.Length;
+        public long Length => customBuffer.GetUnconsumedBytes();
         public ReadOnlySequence<byte> Buffer => customBuffer.ReadBuffer;
         public CustomPipe() : this(CustomPipeOptions.Default)
         {
@@ -33,39 +30,35 @@ namespace CustomPipelines
         {
             this.customBuffer = new CustomPipeBuffer(options ?? CustomPipeOptions.Default);
 
-            this.callbacks = new CallbackManager();
             this.pipeState = new CustomPipeState();
         }
 
-        public void RegisterReadCallback(Action action, bool repeat = true)
-        {
-            this.callbacks.ReadCallback = new StateCallback(action, repeat);
-        }
+        public void RegisterReadCallback(Action action, int targetBytes, bool repeat = true)
+            => this.customBuffer.RegisterReadCallback(action, targetBytes, repeat);
 
         public void RegisterWriteCallback(Action action, bool repeat = true)
-        {
-            this.callbacks.WriteCallback = new StateCallback(action, repeat);
-        }
+            => this.customBuffer.RegisterWriteCallback(action, repeat);
 
         public void Advance(int bytes)
         {
-            if (this.pipeState.CanRead)
+            // 쓰기를 한 메모리 이상으로 커밋 불가능
+            if (this.customBuffer.CheckWritingOutOfRange(bytes))
             {
-                return;
-            }
-
-            // 세그먼트 추가 할당이 필요
-            if (customBuffer.CheckWritingOutOfRange(bytes))     
-            {
-                Trace.WriteLine("bytes : out of range");
+                throw new OutOfMemoryException();
             }
 
             this.customBuffer.AdvanceCore(bytes);
         }
 
+        public void AdvanceAndCommit(int bytes)
+        {
+            Advance(bytes);
+            CommitWrittenBytes();
+        }
+
         public void AdvanceToEnd()
         {
-            SequencePosition endPosition = this.customBuffer.ReadBuffer.End;
+            var endPosition = this.customBuffer.ReadBuffer.End;
             this.AdvanceTo(endPosition, endPosition);
         }
 
@@ -76,44 +69,39 @@ namespace CustomPipelines
 
         public void AdvanceTo(SequencePosition startPosition, SequencePosition endPosition)
         {
-            this.customBuffer.AdvanceReader((CustomBufferSegment?) startPosition.GetObject(), startPosition.GetInteger(),
-                (CustomBufferSegment?) endPosition.GetObject(), endPosition.GetInteger());
+            this.customBuffer.AdvanceReader(ref startPosition, ref endPosition);
             
-            this.pipeState.EndRead();
+            //this.pipeState.EndRead();
         }
-        public StateResult Flush()
+        
+        internal bool CommitWrittenBytes()
         {
-            return new StateResult(false, CommitUnsynchronized());
-        }
-
-        internal bool CommitUnsynchronized()
-        {
-            this.pipeState.EndWrite();
-
-            if (!this.customBuffer.CheckAnyUnflushedBytes())
+            if (!this.customBuffer.CheckAnyUncommittedBytes())
             {
                 // 더이상 쓸 데이터가 없음
                 return true;
             }
 
             this.customBuffer.CommitCore();
-
+            
             return false;
         }
 
-        public Memory<byte> GetWriterMemory(int sizeHint = 0)
+        public Memory<byte>? GetWriterMemory(int sizeHint = 0)
         {
-            if (this.pipeState.CanNotWrite)
+            if (!this.customBuffer.CanWrite)    // pause 상태
             {
                 Trace.WriteLine("NoWritingAllowed");
+                return null;
             }
 
             if (sizeHint < 0)
             {
                 Trace.WriteLine("OutOfRange");
+                return null;
             }
 
-            if (!this.pipeState.IsWritingRunning || this.customBuffer.CheckWriterMemoryInavailable(sizeHint))
+            if (!this.pipeState.CanWrite || this.customBuffer.CheckWriterMemoryInvalid(sizeHint))
             {
                 this.pipeState.BeginWrite();
                 this.customBuffer.AllocateWriteHeadSynchronized(sizeHint); // 세그먼트가 없다면 만들어서 쓰기용 구획을 준비해 두기
@@ -132,12 +120,13 @@ namespace CustomPipelines
 
         public bool Write(ReadOnlyMemory<byte> sourceMemory)
         {
-            if (this.pipeState.CanNotWrite)
+            if (!this.customBuffer.CanWrite)        // 쓰기 제한 걸려 있음
             {
                 return false;
             }
 
-            if (!this.pipeState.IsWritingRunning || this.customBuffer.CheckWriterMemoryInavailable(0))
+            // 메모리 없으면 할당
+            if (this.customBuffer.CheckWriterMemoryInvalid(0))
             {
                 this.customBuffer.AllocateWriteHeadSynchronized(0);
             }
@@ -153,14 +142,14 @@ namespace CustomPipelines
                 this.customBuffer.WriteMultiSegment(sourceMemory.Span);     // 대용량 쓰기
             }
 
-            Flush();
+            this.CommitWrittenBytes();
 
             return true;
         }
 
         public bool TryRead(out StateResult result)
         {
-            if (this.pipeState.IsReadingCompleted || this.customBuffer.Length>0)
+            if (this.pipeState.IsReadingCompleted || this.customBuffer.GetUnconsumedBytes() > 0)
             {
                 result = new StateResult(false, this.pipeState.IsWritingCompleted);
                 return true;
@@ -170,19 +159,17 @@ namespace CustomPipelines
             result = default;
             return false;   
         }
+
         public bool Read()
         {
-            if (this.pipeState.CanNotRead || !this.customBuffer.CheckAnyReadableBytes())    
-            {
+            if (!this.customBuffer.CanRead) // 이미 콜백 걸려있음
                 return false;
-            }
 
             this.pipeState.BeginRead();
-
-            return true;
+            this.customBuffer.CanRead = false;
+            return customBuffer.CheckReadable() ? true : false;
         }
-        
-       
+
         public void Reset()
         {
             this.CompletePipe();
@@ -192,7 +179,8 @@ namespace CustomPipelines
         {
             this.pipeState.EndRead();
 
-            if (this.pipeState.CanWrite)
+            // 쓰기 중인 버퍼가 있으므로 취소 처리하고 정리 (정상 종료)
+            if (this.customBuffer.GetUnconsumedBytes()>0 || this.pipeState.CanWrite)
             {
                 this.CompletePipe();
             }
@@ -200,9 +188,10 @@ namespace CustomPipelines
 
         public void CompleteWriter(Exception exception = null)
         {
-            this.CommitUnsynchronized(); // 보류 중인 버퍼 커밋
+            this.CommitWrittenBytes(); // 보류 중인 버퍼 커밋
 
-            if (this.pipeState.CanRead)
+            // 읽기 중인 버퍼가 있으므로 콜백 처리하고 정리 (정상 종료)
+            if (!this.customBuffer.CheckAnyReadableBytes())     
             {
                 this.CompletePipe();
             }

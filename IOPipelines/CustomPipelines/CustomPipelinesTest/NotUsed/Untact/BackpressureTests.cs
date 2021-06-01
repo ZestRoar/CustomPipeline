@@ -16,7 +16,7 @@ namespace CustomPipelinesTest
         public BackpressureTests()
         {
             _pool = new TestMemoryPool();
-            _pipe = new CustomPipe(new CustomPipeOptions(_pool, resumeWriterThreshold: ResumeWriterThreshold,
+            _pipe = new TestCustomPipe(_pool, new CustomPipeOptions(resumeWriterThreshold: ResumeWriterThreshold,
                 pauseWriterThreshold: PauseWriterThreshold));
         }
 
@@ -96,7 +96,7 @@ namespace CustomPipelinesTest
     //            {
     //                _pipe.Reader.AdvanceTo(result.Buffer.End);
 
-    //                Assert.Equal(PauseWriterThreshold * loops, result.Buffer.Length);
+    //                Assert.Equal(PauseWriterThreshold * loops, result.Buffer.GetUnconsumedBytes);
     //                break;
     //            }
 

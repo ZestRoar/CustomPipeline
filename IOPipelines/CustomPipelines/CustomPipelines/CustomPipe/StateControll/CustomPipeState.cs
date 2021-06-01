@@ -11,7 +11,7 @@ namespace CustomPipelines
         public CustomPipeState()
         {
             readState = FlowState.None;
-            writeState = FlowState.Over;
+            writeState = FlowState.None;
         }
 
         public void Reset()
@@ -23,41 +23,36 @@ namespace CustomPipelines
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void BeginRead()
         {
-            readState &= ~FlowState.Over;
-            writeState |= FlowState.Over;
+            readState |= FlowState.Running;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EndRead()
         {
-            readState |= FlowState.Over;
-            writeState &= ~(FlowState.Over);
+            readState &= ~(FlowState.Running);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void BeginWrite()
         {
-            writeState &= ~FlowState.Over;
-            readState |= FlowState.Over;
+            writeState &= ~FlowState.Running;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EndWrite()
         {
-            writeState |= FlowState.Over;
-            readState &= ~(FlowState.Over);
+            writeState |= FlowState.Running;
         }
 
 
-        public bool IsWritingCompleted => (writeState & (FlowState.Completed | FlowState.Canceled)) != 0;
-        public bool IsReadingCompleted => (readState & (FlowState.Completed | FlowState.Canceled)) != 0;
-        public bool IsWritingRunning => (writeState & FlowState.Running) != 0;
-        public bool IsReadingRunning => (readState & FlowState.Running) != 0;
+        public bool IsWritingCompleted => (writeState & FlowState.Completed) != 0;
+        public bool IsReadingCompleted => (readState & FlowState.Completed) != 0;
 
-        public bool CanWrite => (writeState & FlowState.Over) != 0;
-        public bool CanNotWrite => !CanWrite;
-        public bool CanRead => (readState & FlowState.Over) != 0;
-        public bool CanNotRead => !CanRead;
+        public bool IsWritingCanceled => (writeState & FlowState.Canceled) != 0;
+        public bool IsReadingCanceled => (readState & FlowState.Canceled) != 0;
+        
+        public bool CanWrite => (writeState & FlowState.Running) == 0;
+        public bool CanRead => (readState & FlowState.Running) == 0;
 
         [Flags]
         internal enum FlowState : byte
@@ -65,8 +60,7 @@ namespace CustomPipelines
             None = 0,
             Completed = 1 << 0,
             Running = 1 << 1,
-            Canceled = 1 << 2,
-            Over = 1 << 3
+            Canceled = 1 << 2
         }
 
     }

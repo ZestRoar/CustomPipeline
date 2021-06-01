@@ -14,7 +14,7 @@ namespace CustomPipelinesTest
         public PipeReaderWriterFacts()
         {
             _pool = new TestMemoryPool();
-            _pipe = new CustomPipe(new CustomPipeOptions(_pool));
+            _pipe = new TestCustomPipe(_pool, new CustomPipeOptions());
         }
         public void Dispose()
         {
@@ -23,7 +23,7 @@ namespace CustomPipelinesTest
             _pool?.Dispose();
         }
 
-        private readonly CustomPipe _pipe;
+        private readonly TestCustomPipe _pipe;
 
         private readonly TestMemoryPool _pool;
         [TestMethod]
@@ -85,15 +85,15 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void AdvanceWithGetPositionCrossingIntoWriteHeadWorks()
         {
-            Memory<byte> memory = _pipe.GetWriterMemory(1);
+            Memory<byte> memory = _pipe.GetWriterMemory(1).Value;
             _pipe.Advance(memory.Length);
-            memory = _pipe.GetWriterMemory(1);
+            memory = _pipe.GetWriterMemory(1).Value;
             _pipe.Advance(1);
             _pipe.Flush();
 
             _pipe.Read();
 
-            memory = _pipe.GetWriterMemory(1);
+            memory = _pipe.GetWriterMemory(1).Value;
 
             ReadOnlySequence<byte> buffer = _pipe.Buffer;
             SequencePosition position = buffer.GetPosition(buffer.Length);
@@ -128,7 +128,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void HelloWorldAcrossTwoBlocks()
         {
-            var blockSize = _pipe.GetWriterMemory().Length;
+            var blockSize = _pipe.GetWriterMemory().Value.Length;
 
             byte[] paddingBytes = Enumerable.Repeat((byte) 'a', blockSize - 5).ToArray();
             byte[] bytes = Encoding.ASCII.GetBytes("Hello World");

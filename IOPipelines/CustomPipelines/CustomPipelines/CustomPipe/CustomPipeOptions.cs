@@ -10,8 +10,7 @@ namespace CustomPipelines
 
         public static CustomPipeOptions Default { get; } = new CustomPipeOptions();
 
-        public CustomPipeOptions(System.Buffers.MemoryPool<byte>? pool = null,
-            long pauseWriterThreshold = (long)DefaultPauseWriterThreshold,
+        public CustomPipeOptions(long pauseWriterThreshold = (long)DefaultPauseWriterThreshold,
             long resumeWriterThreshold = (long)(DefaultPauseWriterThreshold >> 1),
             int minimumSegmentSize = DefaultMinimumSegmentSize)
         {
@@ -25,28 +24,24 @@ namespace CustomPipelines
                 throw new ArgumentOutOfRangeException(resumeWriterThreshold.ToString());
             }
 
-            Pool = pool ?? MemoryPool<byte>.Shared;
-            IsDefaultSharedMemoryPool = Pool == MemoryPool<byte>.Shared;
             PauseWriterThreshold = pauseWriterThreshold;
             ResumeWriterThreshold = resumeWriterThreshold;
+            MinimumSegmentSize = minimumSegmentSize;
         }
 
+        public bool CheckPauseWriter(long oldBytes, long currentBytes)
+            => oldBytes < PauseWriterThreshold && currentBytes >= PauseWriterThreshold;
+        public bool CheckResumeWriter(long oldBytes, long currentBytes)
+            => oldBytes >= ResumeWriterThreshold && currentBytes < ResumeWriterThreshold;
+
         /// <summary>Flush 쓰기 작업 중단 바이트</summary>
-        public long PauseWriterThreshold { get; } = DefaultPauseWriterThreshold;
+        public long PauseWriterThreshold { get; } 
 
         /// <summary>Flush 쓰기 작업 재개 바이트</summary>
         public long ResumeWriterThreshold { get; }
 
         /// <summary>요청받은 세그먼트 최소 사이즈</summary>
-        public int MinimumSegmentSize { get; } = DefaultMinimumSegmentSize;
-
-        /// <summary>버퍼 관리를 위한 메모리풀을 참조</summary>
-        public MemoryPool<byte> Pool { get; }
-
-        /// <summary>
-        /// 메모리풀 공유상태 체크
-        /// </summary>
-        internal bool IsDefaultSharedMemoryPool { get; }
+        public int MinimumSegmentSize { get; } 
 
         /// <summary>
         /// 메모리풀 초기 사이즈

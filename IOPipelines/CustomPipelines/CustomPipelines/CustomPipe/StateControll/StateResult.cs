@@ -2,7 +2,7 @@
 
 namespace CustomPipelines
 {
-    public readonly struct StateResult
+    public readonly struct StateResult   // 해제되거나 에러, 강제 종료 등 외부적인 상태 체크용
     {
         internal readonly StateFlags resultFlags;
 

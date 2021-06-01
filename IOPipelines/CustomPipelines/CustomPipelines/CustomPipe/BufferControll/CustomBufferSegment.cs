@@ -5,9 +5,8 @@ using System.Runtime.CompilerServices;
 
 namespace CustomPipelines
 {
-    internal sealed class CustomBufferSegment : ReadOnlySequenceSegment<byte>
+    internal sealed class CustomBufferSegment : ReadOnlySequenceSegment<byte>           // 디폴트 메모리 풀 사용할 것이므로 메모리 오너 관련 멤버들 삭제함
     {
-        private IMemoryOwner<byte>? memoryOwner;
         private byte[]? array;
         private CustomBufferSegment? next;
         private int end;
@@ -25,7 +24,7 @@ namespace CustomPipelines
                 Debug.Assert(value <= AvailableMemory.Length);
 
                 this.end = value;
-                Memory = AvailableMemory.Slice(0, value);
+                Memory = AvailableMemory[..value];
             }
         }
 
@@ -43,13 +42,7 @@ namespace CustomPipelines
                 this.next = value;
             }
         }
-
-        public void SetOwnedMemory(IMemoryOwner<byte> memoryOwner)
-        {
-            this.memoryOwner = memoryOwner;
-            AvailableMemory = memoryOwner.Memory;
-        }
-
+        
         public void SetOwnedMemory(byte[] arrayPoolBuffer)
         {
             this.array = arrayPoolBuffer;
@@ -58,18 +51,9 @@ namespace CustomPipelines
 
         public void ResetMemory()
         {
-            IMemoryOwner<byte>? memoryOwner = this.memoryOwner;
-            if (memoryOwner != null)
-            {
-                this.memoryOwner = null;
-                memoryOwner.Dispose();
-            }
-            else
-            {
-                Debug.Assert(this.array != null);
-                ArrayPool<byte>.Shared.Return(this.array);
-                this.array = null;
-            }
+            Debug.Assert(this.array != null);
+            ArrayPool<byte>.Shared.Return(this.array);
+            this.array = null;
 
             Next = null;
             RunningIndex = 0;
@@ -78,8 +62,6 @@ namespace CustomPipelines
             this.end = 0;
             AvailableMemory = default;
         }
-
-        internal object? MemoryOwner => (object?)this.memoryOwner ?? this.array;
 
         public Memory<byte> AvailableMemory { get; private set; }
 
@@ -109,9 +91,16 @@ namespace CustomPipelines
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static long GetLength(CustomBufferSegment startSegment, int startIndex, CustomBufferSegment endSegment, int endIndex)
+        internal static long GetLength(CustomBufferSegment startSegment, int startIndex, 
+                                        CustomBufferSegment endSegment, int endIndex)
         {
             return (endSegment.RunningIndex + (uint)endIndex) - (startSegment.RunningIndex + (uint)startIndex);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool IsInvalidLength(CustomBufferSegment startSegment, int startIndex, 
+                                                CustomBufferSegment endSegment, int endIndex)
+        {
+            return GetLength(startSegment,startIndex,endSegment,endIndex) < 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
