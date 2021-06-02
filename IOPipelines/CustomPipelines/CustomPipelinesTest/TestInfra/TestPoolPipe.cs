@@ -1,51 +1,42 @@
 ﻿using System;
 using System.Buffers;
-using System.Runtime.CompilerServices;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using CustomPipelines;
 
-[assembly: InternalsVisibleTo("CustomPipelinesTest")]
-
-namespace CustomPipelines
+namespace CustomPipelinesTest
 {
-    internal class CustomPipe
+    class TestPoolPipe
     {
+        private readonly MemoryPool<byte>? _pool;
+
         internal const int MaxSegmentPoolSize = 256;
         // 메모리 운용
-        private readonly CustomPipeBuffer customBuffer;
+        private readonly TestPoolPipeBuffer customBuffer;
 
         // 파이프 상태 체크 용
         private readonly CustomPipeState pipeState;
 
         private bool disposed;
 
-        private Exception? completeException;
-
         public long Length => customBuffer.GetUnconsumedBytes();
         public ReadOnlySequence<byte> Buffer => customBuffer.ReadBuffer;
-        public CustomPipe() : this(CustomPipeOptions.Default)
-        {
-           
-        }
 
-        public CustomPipe(CustomPipeOptions options)
+
+        public TestPoolPipe(CustomPipeOptions options)
         {
-            this.customBuffer = new CustomPipeBuffer(options ?? CustomPipeOptions.Default);
+            this.customBuffer = new TestPoolPipeBuffer(options ?? CustomPipeOptions.Default);
 
             this.pipeState = new CustomPipeState();
         }
 
-        public void RegisterReadCallback(Action action, int targetBytes, bool repeat = false)
+        public void RegisterReadCallback(Action action, int targetBytes, bool repeat = true)
             => this.customBuffer.RegisterReadCallback(action, targetBytes, repeat);
 
-        public void RegisterWriteCallback(Action action, bool repeat = false)
+        public void RegisterWriteCallback(Action action, bool repeat = true)
             => this.customBuffer.RegisterWriteCallback(action, repeat);
-
-        public void CancelWrite() => this.pipeState.CancelWrite();
-        public void CancelRead() => this.pipeState.CancelRead();
-
-        public StateResult ReadResult =>
-            new(this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
-        public StateResult WriteResult =>
-            new(this.pipeState.IsWritingCanceled, this.pipeState.IsWritingCompleted);
 
         public void Advance(int bytes)
         {
@@ -77,16 +68,11 @@ namespace CustomPipelines
 
         public void AdvanceTo(SequencePosition startPosition, SequencePosition endPosition)
         {
-            if (this.pipeState.IsReadingCompleted)
-            {
-                throw new InvalidOperationException
-                    ("Reading is not allowed after reader was completed.");
-            }
-
             this.customBuffer.AdvanceTo(ref startPosition, ref endPosition);
-            
+
+            //this.pipeState.EndRead();
         }
-        
+
         internal bool CommitWrittenBytes()
         {
             if (!this.customBuffer.CheckAnyUncommittedBytes())
@@ -96,13 +82,13 @@ namespace CustomPipelines
             }
 
             this.customBuffer.Commit();
-            
+
             return false;
         }
 
         public Memory<byte>? GetWriterMemory(int sizeHint = 0)
         {
-            if (this.pipeState.IsWritingCompleted)    
+            if (this.pipeState.IsWritingCompleted)
             {
                 throw new InvalidOperationException();
             }
@@ -114,14 +100,12 @@ namespace CustomPipelines
 
             // 쓰기중이거나 메모리 없으면 null
             if (!this.customBuffer.CanWrite)
-            {
                 return null;
-            }
 
             if (this.customBuffer.CheckWriterMemoryInvalid(sizeHint))
-            {
                 this.customBuffer.AllocateWriteHead(sizeHint); // 세그먼트가 없다면 만들어서 쓰기용 구획을 준비해 두기
-            }
+
+            //this.pipeState.BeginWrite();
 
             return this.customBuffer.Memory;
         }
@@ -167,31 +151,18 @@ namespace CustomPipelines
         {
             if (this.pipeState.IsReadingCompleted || this.customBuffer.GetUnconsumedBytes() > 0)
             {
-                result = new StateResult(this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
+                result = new StateResult(false, this.pipeState.IsWritingCompleted);
                 return true;
             }
 
             result = default;
-            return false;   
+            return false;
         }
-
 
         public bool Read()
         {
-            if (this.pipeState.IsReadingCompleted)
-            {
-                throw new InvalidOperationException("No Reading Allowed");
-            }
-
-            if (completeException != null)
-            {
-                throw completeException;
-            }
-
             if (!this.customBuffer.CanRead) // 이미 콜백 걸려있음
-            {
                 return false;
-            }
 
             this.customBuffer.CanRead = false;
             return customBuffer.CheckReadable() ? true : false;
@@ -210,8 +181,6 @@ namespace CustomPipelines
         {
             this.pipeState.CompleteRead();
 
-            completeException = exception;
-
             // 쓰기 중인 버퍼가 있으므로 취소 처리하고 정리 (정상 종료)
             if (this.pipeState.IsWritingCompleted)
             {
@@ -223,10 +192,8 @@ namespace CustomPipelines
         {
             this.CommitWrittenBytes(); // 보류 중인 버퍼 커밋
 
-            completeException = exception;
-
             // 읽기 중인 버퍼가 있으므로 콜백 처리하고 정리 (정상 종료)
-            if (this.pipeState.IsReadingCompleted)     
+            if (this.pipeState.IsReadingCompleted)
             {
                 this.CompletePipe();
             }
@@ -249,6 +216,5 @@ namespace CustomPipelines
             this.customBuffer.Reset();
             this.disposed = false;
         }
-
     }
 }

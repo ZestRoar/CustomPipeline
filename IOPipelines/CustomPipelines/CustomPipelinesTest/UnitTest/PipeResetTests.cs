@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.IO.Pipes;
 using CustomPipelines;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -10,17 +11,14 @@ namespace CustomPipelinesTest
     {
         public PipeResetTests()
         {
-            _pool = new TestMemoryPool();
-            _pipe = new TestCustomPipe(_pool, new CustomPipeOptions());
+            _pipe = new TestCustomPipe(new CustomPipeOptions());
         }
         public void Dispose()
         {
             _pipe.CompleteWriter();
             _pipe.CompleteReader();
-            _pool?.Dispose();
         }
 
-        private readonly TestMemoryPool _pool;
         private readonly TestCustomPipe _pipe;
         
         [TestMethod]
@@ -30,8 +28,7 @@ namespace CustomPipelinesTest
 
             _pipe.Write(source);
             _pipe.Read();
-
-            Assert.AreEqual(source, _pipe.GetReaderSpan().ToArray());
+            CollectionAssert.AreEqual(source, _pipe.Buffer.ToArray());
             _pipe.AdvanceToEnd();
 
             _pipe.CompleteReader();
@@ -42,7 +39,7 @@ namespace CustomPipelinesTest
             _pipe.Write(source);
             _pipe.Read();
 
-            Assert.AreEqual(source, _pipe.GetReaderSpan().ToArray());
+            CollectionAssert.AreEqual(source, _pipe.Buffer.ToArray());
             _pipe.AdvanceToEnd();
         }
 

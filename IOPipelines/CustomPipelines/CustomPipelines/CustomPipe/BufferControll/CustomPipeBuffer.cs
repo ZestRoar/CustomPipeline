@@ -63,15 +63,14 @@ namespace CustomPipelines
         public bool CanRead { get; set; }
 
         public long GetUnconsumedBytes() => this.unconsumedBytes;
-        public bool CheckReadable() => this.unconsumedBytes > this.readTargetBytes;
+        public bool CheckReadable() => readTargetBytes>=0 && this.unconsumedBytes >= this.readTargetBytes;
         public bool CheckWritingOutOfRange(int bytes) 
             => (uint)bytes > (uint)this.writingHeadMemory.Length;
         public bool CheckAnyUncommittedBytes() => this.uncommittedBytes > 0;
         public bool CheckAnyReadableBytes() 
             => (this.readHead != this.readTail)||(this.readHeadIdx != this.readTailIdx);
         public bool CheckWriterMemoryInvalid(int sizeHint)
-            => this.writingHeadMemory.Length == 0 || 
-               this.writingHeadMemory.Length < sizeHint;
+            => this.writingHeadMemory.Length <= sizeHint;
 
         public void RegisterReadCallback(Action action, int targetBytes, bool repeat = false)
         {
@@ -121,14 +120,14 @@ namespace CustomPipelines
             this.writeCallback.SetCallback(null,false);
         }
 
-        public void AdvanceCore(int bytesWritten)
+        public void Advance(int bytesWritten)
         {
             this.uncommittedBytes += bytesWritten;
             this.writingHeadBytesBuffered += bytesWritten;
             this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
         }
 
-        public void AdvanceReader(ref SequencePosition startPosition, ref SequencePosition endPosition)
+        public void AdvanceTo(ref SequencePosition startPosition, ref SequencePosition endPosition)
         {
             var consumedSegment = (CustomBufferSegment?)startPosition.GetObject();
             var consumedIndex = startPosition.GetInteger();
@@ -136,18 +135,16 @@ namespace CustomPipelines
             var examinedIndex = endPosition.GetInteger();
 
             // Throw if examined < consumed
-            if (CustomBufferSegment.IsInvalidLength(
+            if (consumedSegment != null && examinedSegment != null && 
+                CustomBufferSegment.IsInvalidLength(
                 consumedSegment, consumedIndex, 
                     examinedSegment, examinedIndex))
             {
-                throw new ArgumentOutOfRangeException();
+                throw new InvalidOperationException();
             }
 
             // 메모리 시퀀스 갱신
-            if (UpdateBuffer(ref examinedSegment, ref examinedIndex) == false)
-            {
-                return;
-            }
+            UpdateBuffer(ref examinedSegment, ref examinedIndex);
 
             // 소비된 메모리 해제
             UnlinkUsedMemory(ref consumedSegment, ref consumedIndex);
@@ -155,10 +152,12 @@ namespace CustomPipelines
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool UpdateBuffer(ref CustomBufferSegment? examinedSegment, ref int examinedIndex)
+        private void UpdateBuffer(ref CustomBufferSegment? examinedSegment, ref int examinedIndex)
         {
-            if (examinedSegment == null || this.lastExaminedIndex < 0) 
-                return false;
+            if (examinedSegment == null || this.lastExaminedIndex < 0)
+            {
+                return;
+            }
 
             var examinedBytes = CustomBufferSegment.GetLength(
                 this.lastExaminedIndex, examinedSegment, examinedIndex);
@@ -166,7 +165,7 @@ namespace CustomPipelines
 
             if (examinedBytes < 0)
             {
-                throw new OutOfMemoryException();
+                throw new InvalidOperationException();
             }
 
             this.unconsumedBytes -= examinedBytes;
@@ -177,13 +176,15 @@ namespace CustomPipelines
             Debug.Assert(this.unconsumedBytes >= 0, "GetUnconsumedBytes has gone negative");
 
             if ((this.CanWrite == true) || !this.options.CheckResumeWriter(oldLength, unconsumedBytes))
-                return true;
+            {
+                return;
+            }
 
             this.CanWrite = true;
 
             this.writeCallback.RunCallback();
 
-            return true;
+            return;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -191,18 +192,13 @@ namespace CustomPipelines
         {
             CustomBufferSegment? returnStart = null;
             CustomBufferSegment? returnEnd = null;
-
+            
             if (consumedSegment == null)
             {
                 return;
             }
-                
-            if (this.readHead == null)
-            {
-                Trace.WriteLine("AdvanceToInvalidCursor");
-                return;
-            }
-            returnStart = this.readHead;
+
+            returnStart = readHead ?? throw new InvalidOperationException();
             returnEnd = consumedSegment;
 
             if (consumedIndex == returnEnd.Length)  // 세그먼트 전체를 소비했으면
@@ -259,7 +255,7 @@ namespace CustomPipelines
         }
 
 
-        private void MoveReturnEndToNextBlock(ref CustomBufferSegment returnEnd)
+        private void MoveReturnEndToNextBlock(ref CustomBufferSegment? returnEnd)
         {
             var nextBlock = returnEnd!.NextSegment;
             if (this.readTail == returnEnd)
@@ -274,18 +270,11 @@ namespace CustomPipelines
             returnEnd = nextBlock;
         }
 
-        public void CommitCore()
+        public void Commit()
         {
             if (this.writingHead == null)
             {
-                Trace.WriteLine("문제가 있어 파이프 라인 전부 해제 후 재가동합니다.");
-                Complete();
-
-                CustomBufferSegment newSegment = AllocateSegment(0);
-
-                this.writingHead = this.readHead = this.readTail = newSegment;
-                this.lastExaminedIndex = 0;
-                return;
+                throw new NullReferenceException("writingHead is null");
             }
 
             // Advance로 인한 구간 증가 적용
@@ -300,7 +289,7 @@ namespace CustomPipelines
             this.uncommittedBytes = 0;
 
             // LengthCheck
-            if (this.readTargetBytes >= 0 && this.readTargetBytes < this.unconsumedBytes)       
+            if (this.CheckReadable())       
             {
                 this.readCallback.RunCallback();
                 this.CanRead = true;
@@ -316,7 +305,7 @@ namespace CustomPipelines
 
         }
 
-        public void AllocateWriteHeadSynchronized(int sizeHint)
+        public void AllocateWriteHead(int sizeHint)
         {
             if (this.writingHead == null)
             {
@@ -325,7 +314,7 @@ namespace CustomPipelines
                 this.writingHead = this.readHead = this.readTail = newSegment;
                 this.lastExaminedIndex = 0;
             }
-            else if (this.CheckWriterMemoryInvalid(sizeHint))
+            else 
             {
                 this.CommitWritingHead();
 
@@ -333,10 +322,6 @@ namespace CustomPipelines
 
                 this.writingHead!.SetNext(newSegment);
                 this.writingHead = newSegment;
-            }
-            else
-            {
-                Trace.WriteLine("Writer Memory Available!");
             }
         }
 
@@ -365,17 +350,9 @@ namespace CustomPipelines
         // 큰 쓰기 작업을 해야할 때 추가적인 세그먼트 할당이 필요하면 진행
         public void WriteMultiSegment(ReadOnlySpan<byte> source)
         {
-            // 이 경우 쓰기 버퍼 누락으로 Cancel 콜백을 발동시켜야 함  
-            if (this.writingHead == null)       
+            if (this.writingHead == null)
             {
-                Trace.WriteLine("문제가 있어 파이프 라인 전부 해제 후 재가동합니다."); 
-                Complete();
-
-                CustomBufferSegment newSegment = AllocateSegment(0);
-
-                this.writingHead = this.readHead = this.readTail = newSegment;
-                this.lastExaminedIndex = 0;
-                return;
+                throw new NullReferenceException("writingHead is null");
             }
             
             var destination = this.writingHeadMemory.Span;
@@ -385,7 +362,7 @@ namespace CustomPipelines
                 var writable = Math.Min(destination.Length, source.Length);
                 source[..writable].CopyTo(destination);
                 source = source[writable..];
-                AdvanceCore(writable);
+                Advance(writable);
 
                 if (source.Length == 0)
                 {

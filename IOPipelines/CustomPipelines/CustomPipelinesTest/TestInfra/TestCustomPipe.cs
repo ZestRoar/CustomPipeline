@@ -13,19 +13,10 @@ namespace CustomPipelines
 {
     internal class TestCustomPipe : CustomPipe
     {
-        private readonly MemoryPool<byte>? _pool;
 
         public TestCustomPipe(CustomPipeOptions options) : base(options)
         {
 
-        }
-        public TestCustomPipe(TestMemoryPool testPool, CustomPipeOptions options)
-        {
-            _pool = testPool;
-        }
-        public TestCustomPipe(HeapBufferPool testPool, CustomPipeOptions options)
-        {
-            _pool = testPool;
         }
 
         public bool WriteEmpty(int writeBytes)

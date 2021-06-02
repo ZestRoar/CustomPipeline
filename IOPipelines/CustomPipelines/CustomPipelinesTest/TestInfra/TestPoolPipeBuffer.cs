@@ -7,9 +7,9 @@ using CustomPipelines;
 
 namespace CustomPipelinesTest
 {
-    internal class TestCustomPipeBuffer : CustomPipeBuffer
+    internal class TestPoolPipeBuffer : CustomPipeBuffer
     {
-        public TestCustomPipeBuffer(CustomPipeOptions options) : base(options)
+        public TestPoolPipeBuffer(CustomPipeOptions options) : base(options)
         {
 
         }

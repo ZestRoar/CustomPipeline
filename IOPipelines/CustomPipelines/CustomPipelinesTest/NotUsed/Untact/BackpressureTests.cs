@@ -15,8 +15,7 @@ namespace CustomPipelinesTest
 
         public BackpressureTests()
         {
-            _pool = new TestMemoryPool();
-            _pipe = new TestCustomPipe(_pool, new CustomPipeOptions(resumeWriterThreshold: ResumeWriterThreshold,
+            _pipe = new TestCustomPipe( new CustomPipeOptions(resumeWriterThreshold: ResumeWriterThreshold,
                 pauseWriterThreshold: PauseWriterThreshold));
         }
 

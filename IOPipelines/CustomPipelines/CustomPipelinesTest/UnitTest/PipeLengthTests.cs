@@ -271,7 +271,7 @@ namespace CustomPipelinesTest
             _pipe.Flush();
 
             _pipe.Read();
-            Assert.ThrowsException<ArgumentOutOfRangeException>(() =>
+            Assert.ThrowsException<InvalidOperationException>(() =>
                 _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.Start));
         }
         [TestMethod]

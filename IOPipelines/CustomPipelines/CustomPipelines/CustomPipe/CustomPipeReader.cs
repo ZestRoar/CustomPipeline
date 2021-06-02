@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Threading;
 
 namespace CustomPipelines
 {
@@ -13,36 +14,7 @@ namespace CustomPipelines
             this.readerPipe = pipe;
         }
 
-        public bool ReadTrigger(Action readCallback, int targetBytes, bool repeat = false)
-        {
-            readerPipe.RegisterReadCallback(readCallback, targetBytes, repeat);
-
-            if (readerPipe.Length < targetBytes)
-            {
-                return true;
-            }
-
-            this.readerPipe.Read();
-            
-            return false;
-        }
-        public bool ReadTrigger(out ReadOnlySequence<byte> readBuffer, 
-            Action readCallback, int targetBytes, bool repeat = false)
-        {
-            readerPipe.RegisterReadCallback(readCallback, targetBytes, repeat);
-
-            if (readerPipe.Length < targetBytes)
-            {
-                readBuffer = readerPipe.Buffer;
-                return true;
-            }
-
-            this.readerPipe.Read();
-
-            readBuffer = default;
-
-            return false;
-        }
+        
 
         public bool TryRead(out StateResult result) => this.readerPipe.TryRead(out result);
 

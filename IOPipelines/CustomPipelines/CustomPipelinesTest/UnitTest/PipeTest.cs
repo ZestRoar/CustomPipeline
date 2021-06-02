@@ -11,14 +11,11 @@ namespace CustomPipelinesTest
 
         protected const int MaximumSizeLow = 6;
 
-        private readonly TestMemoryPool _pool;
-
         internal TestCustomPipe Pipe;
 
         public PipeTest(int pauseWriterThreshold = MaximumSizeHigh, int resumeWriterThreshold = MaximumSizeLow)
         {
-            _pool = new TestMemoryPool();
-            Pipe = new TestCustomPipe(_pool, new CustomPipeOptions(
+            Pipe = new TestCustomPipe(new CustomPipeOptions(
                     pauseWriterThreshold: pauseWriterThreshold,
                     resumeWriterThreshold: resumeWriterThreshold
                 ));
@@ -28,7 +25,6 @@ namespace CustomPipelinesTest
         {
             Pipe.CompleteWriter();
             Pipe.CompleteReader();
-            _pool.Dispose();
         }
     }
 }

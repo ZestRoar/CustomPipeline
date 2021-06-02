@@ -21,14 +21,19 @@ namespace CustomPipelinesTest
         private byte[] Read()
         {
             Pipe.Flush();
-            //StateResult readResult = Pipe.Reader.ReadAsync().GetAwaiter().GetResult();
             Pipe.Read();
-            byte[] data = Pipe.Buffer.ToArray();
-            //Pipe.AdvanceToEnd();
+            var data = Pipe.Buffer.ToArray();
+            Pipe.AdvanceToEnd();
             return data;
         }
 
         [TestMethod]
+        [DataRow(3,-1,0)]
+        [DataRow(3,0,-1)]
+        [DataRow(3,0,4)]
+        [DataRow(3,4,0)]
+        [DataRow(3,-1,-1)]
+        [DataRow(3,4,4)]
         public void ThrowsForInvalidParameters(int arrayLength, int offset, int length)
         {
             var array = new byte[arrayLength];
@@ -51,24 +56,29 @@ namespace CustomPipelinesTest
             }
 
             Pipe.Write(new Span<byte>(array, 0, array.Length));
-            Assert.AreEqual(array, Read());
+            CollectionAssert.AreEqual(array, Read());
         }
 
         [TestMethod]
+        [DataRow(0, 3)]
+        [DataRow(1, 1)]
+        [DataRow(1, 2)]
+        [DataRow(2, 1)]
+
         public void CanWriteWithOffsetAndLength(int offset, int length)
         {
             var array = new byte[] { 1, 2, 3 };
 
             Pipe.Write(new Span<byte>(array, offset, length));
 
-            Assert.AreEqual(array.Skip(offset).Take(length).ToArray(), Read());
+            CollectionAssert.AreEqual(array.Skip(offset).Take(length).ToArray(), Read());
         }
 
         [TestMethod]
         public void CanWriteIntoHeadlessBuffer()
         {
             Pipe.Write(new byte[] { 1, 2, 3 });
-            Assert.AreEqual(new byte[] { 1, 2, 3 }, Read());
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, Read());
         }
 
         [TestMethod]
@@ -78,7 +88,7 @@ namespace CustomPipelinesTest
             Pipe.Write(new byte[] { 2 });
             Pipe.Write(new byte[] { 3 });
 
-            Assert.AreEqual(new byte[] { 1, 2, 3 }, Read());
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, Read());
         }
 
         [TestMethod]
@@ -90,8 +100,8 @@ namespace CustomPipelinesTest
             byte[] expectedBytes = source.Concat(source).Concat(source).ToArray();
 
             Pipe.Write(expectedBytes);
-            
-            Assert.AreEqual(expectedBytes, Read());
+
+            CollectionAssert.AreEqual(expectedBytes, Read());
         }
 
         [TestMethod]
@@ -102,7 +112,7 @@ namespace CustomPipelinesTest
             Assert.IsTrue(span.Length >= 10);
             // 0 byte Flush would not complete the reader so we complete.
             Pipe.CompleteWriter();
-            Assert.AreEqual(new byte[] { }, Read());
+            CollectionAssert.AreEqual(new byte[] { }, Read());
         }
 
         [TestMethod]
@@ -114,10 +124,16 @@ namespace CustomPipelinesTest
             Span<byte> span = Pipe.GetWriterMemory().Value.Span;
 
             Assert.AreEqual(initialLength - 3, span.Length);
-            Assert.AreEqual(new byte[] { 1, 2, 3 }, Read());
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, Read());
         }
 
         [TestMethod]
+        [DataRow(5)]
+        [DataRow(50)]
+        [DataRow(500)]
+        [DataRow(5000)]
+        [DataRow(50000)]
+
         public void WriteLargeDataBinary(int length)
         {
             var data = new byte[length];
@@ -125,7 +141,7 @@ namespace CustomPipelinesTest
             Pipe.Write(data);
             Pipe.Read();
             ReadOnlySequence<byte>? input = Pipe.Buffer;
-            Assert.AreEqual(data, Pipe.Buffer.ToArray());
+            CollectionAssert.AreEqual(data, Pipe.Buffer.ToArray());
             Pipe.AdvanceToEnd();
         }
 
@@ -156,11 +172,13 @@ namespace CustomPipelinesTest
             Assert.ThrowsException<ArgumentOutOfRangeException>(() => Pipe.Advance(1));
         }
 
+
+
         [TestMethod]
         public void WritesUsingGetSpanWorks()
         {
             var bytes = Encoding.ASCII.GetBytes("abcdefghijklmnopqrstuvwzyz");
-            var pipe = new TestCustomPipe(new HeapBufferPool(), new CustomPipeOptions(minimumSegmentSize: 1));
+            var pipe = new TestCustomPipe( new CustomPipeOptions(minimumSegmentSize: 1));
             
             for (int i = 0; i < bytes.Length; i++)
             {
@@ -171,7 +189,7 @@ namespace CustomPipelinesTest
             Pipe.Flush(); 
             Pipe.CompleteWriter();
             Pipe.Read();
-            Assert.AreEqual(bytes, Pipe.Buffer.ToArray());
+            CollectionAssert.AreEqual(bytes, Pipe.Buffer.ToArray());
             pipe.AdvanceToEnd();
 
             pipe.CompleteReader();
@@ -181,7 +199,7 @@ namespace CustomPipelinesTest
         public void WritesUsingGetMemoryWorks()
         {
             var bytes = Encoding.ASCII.GetBytes("abcdefghijklmnopqrstuvwzyz");
-            var pipe = new TestCustomPipe(new HeapBufferPool(), new CustomPipeOptions(minimumSegmentSize: 1));
+            var pipe = new TestCustomPipe( new CustomPipeOptions(minimumSegmentSize: 1));
            
             for (int i = 0; i < bytes.Length; i++)
             {
@@ -192,75 +210,83 @@ namespace CustomPipelinesTest
             Pipe.Flush(); 
             Pipe.CompleteWriter();
             Pipe.Read();
-            Assert.AreEqual(bytes, Pipe.Buffer.ToArray());
+            CollectionAssert.AreEqual(bytes, Pipe.Buffer.ToArray());
             pipe.AdvanceToEnd();
 
             pipe.CompleteReader();
         }
 
-        [TestMethod]
-        public void CompleteWithLargeWriteThrows()              // 아직 미완성
-        {
-            var pipe = new CustomPipe();
-            pipe.CompleteReader();
+        // ======================================= 아래는 pool 검사 모드 제작 완료 시 진행 =================================================
 
-            //var task = Task.Run(async () =>
-            //{
-            //    await Task.Delay(10);
-            //    pipe.CompleteWriter();
-            //});
+        //[TestMethod]
+        //public void WriteAsyncWithACompletedReaderNoops()
+        //{
+        //    var pool = new DisposeTrackingBufferPool();
+        //    var pipe = new TestCustomPipe(pool, new CustomPipeOptions());
+        //    pipe.CompleteReader();
 
-            try
-            {
-                for (int i = 0; i < 1000; i++)
-                {
-                    var buffer = new byte[10000000];
-                    //await pipe.Writer.WriteAsync(buffer);
-                    Pipe.Write(buffer);
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                // Complete while writing
-            }
+        //    byte[] writeBuffer = new byte[100];
+        //    for (var i = 0; i < 10000; i++)
+        //    {
+        //        pipe.Write(writeBuffer);
+        //    }
 
-            //await task;
-            pipe.CompleteWriter();
-        }
+        //    Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
+        //}
 
-        [TestMethod]
-        public void WriteAsyncWithACompletedReaderNoops()
-        {
-            var pool = new DisposeTrackingBufferPool();
-            var pipe = new TestCustomPipe(pool, new CustomPipeOptions());
-            pipe.CompleteReader();
+        //[TestMethod]
+        //public void GetMemoryFlushWithACompletedReaderNoops()
+        //{
+        //    var pool = new DisposeTrackingBufferPool();
+        //    var pipe = new TestCustomPipe(pool, new CustomPipeOptions());
+        //    pipe.CompleteReader();
 
-            byte[] writeBuffer = new byte[100];
-            for (var i = 0; i < 10000; i++)
-            {
-                pipe.Write(writeBuffer);
-            }
+        //    for (var i = 0; i < 10000; i++)
+        //    {
+        //        var mem = pipe.GetWriterMemory();
+        //        pipe.Advance(mem.Value.Length);
+        //        pipe.Flush();
+        //    }
 
-            Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
-        }
+        //    Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
+        //    pipe.CompleteWriter();
+        //    Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
+        //}
 
-        [TestMethod]
-        public void GetMemoryFlushWithACompletedReaderNoops()
-        {
-            var pool = new DisposeTrackingBufferPool();
-            var pipe = new TestCustomPipe(pool, new CustomPipeOptions());
-            pipe.CompleteReader();
+        // ======================================= 쓰레드 사용 시 체크 =================================================
 
-            for (var i = 0; i < 10000; i++)
-            {
-                var mem = pipe.GetWriterMemory();
-                pipe.Advance(mem.Value.Length);
-                pipe.Flush();
-            }
 
-            Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
-            pipe.CompleteWriter();
-            Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
-        }
+        //[TestMethod]
+        //public void CompleteWithLargeWriteThrows()              // 아직 미완성
+        //{
+        //    var pipe = new CustomPipe();
+        //    pipe.CompleteReader();
+
+        //    int iSleep = 0;
+        //    while (iSleep < 1000000)
+        //    {
+        //        ++iSleep;
+        //    }
+        //    pipe.CompleteWriter();
+
+        //    try
+        //    {
+        //        for (int i = 0; i < 1000; i++)
+        //        {
+        //            var buffer = new byte[10000000];
+        //            Pipe.Write(buffer);
+        //        }
+        //    }
+        //    catch (InvalidOperationException)
+        //    {
+        //        // Complete while writing
+        //    }
+
+        //    //await task;
+        //    pipe.CompleteWriter();
+
+        //    Assert.AreEqual(999, 1);
+
+        //}
     }
 }
