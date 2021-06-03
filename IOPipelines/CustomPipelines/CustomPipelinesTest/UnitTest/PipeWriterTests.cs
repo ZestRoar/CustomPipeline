@@ -228,7 +228,7 @@ namespace CustomPipelinesTest
         //    byte[] writeBuffer = new byte[100];
         //    for (var i = 0; i < 10000; i++)
         //    {
-        //        pipe.TryWrite(writeBuffer);
+        //        pipe.Write(writeBuffer);
         //    }
 
         //    Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
@@ -274,7 +274,7 @@ namespace CustomPipelinesTest
         //        for (int i = 0; i < 1000; i++)
         //        {
         //            var buffer = new byte[10000000];
-        //            Pipe.TryWrite(buffer);
+        //            Pipe.Write(buffer);
         //        }
         //    }
         //    catch (InvalidOperationException)

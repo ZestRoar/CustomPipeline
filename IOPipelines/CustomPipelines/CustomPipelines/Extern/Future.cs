@@ -7,6 +7,8 @@
   // 현재 생각으론 필요 없어 보인다.
   public sealed class Future<TResult>
   {
+#nullable enable
+      
     private static readonly Action<TResult> Dummy = _ =>
     {
     };

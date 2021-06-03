@@ -5,11 +5,13 @@
 
   public class Signal
   {
-      // OnCompleted -> 신호 완료
-      // Reset -> 콜백 대기
-      // Set -> 신호 완료
+#nullable enable
 
-      private static readonly Action ContinuationCompleted = delegate
+        // OnCompleted -> 신호 완료
+        // Reset -> 콜백 대기
+        // Set -> 신호 완료
+
+        private static readonly Action ContinuationCompleted = delegate
     {
     };
 

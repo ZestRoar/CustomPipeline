@@ -8,11 +8,10 @@ namespace CustomPipelines
 {
     internal class CustomPipeBuffer
     {
+#nullable enable
         // 세그먼트 풀 & 옵션
         private CustomBufferSegmentStack customBufferSegmentPool;
         private readonly CustomPipeOptions options;
-
-        // readHead - readTail - writingHead - lastExamined 순
 
         // 인덱싱 갱신 용(바이트 더하기)
         private long unconsumedBytes;
@@ -22,7 +21,6 @@ namespace CustomPipelines
         // 메모리 관리용 데이터, 마지막 위치를 인덱싱하며 해제 바이트 측정에 사용
         private long lastExaminedIndex = -1;
 
-#nullable enable
         // 읽기 중인 메모리의 시작 부분을 나타냄
         private CustomBufferSegment? readHead;
         private int readHeadIdx;
@@ -37,8 +35,8 @@ namespace CustomPipelines
 
         // 콜백 등록 용도
         private int readTargetBytes;
-        internal Signal writeSignal;
-        internal Future<ReadResult> readPromise;
+        internal Signal WriteSignal;
+        internal Future<ReadResult> ReadPromise;
 
 
         public CustomPipeBuffer(CustomPipeOptions options)
@@ -48,8 +46,8 @@ namespace CustomPipelines
             this.readTargetBytes = -1;
             this.CanWrite = true;
             this.CanRead = true;
-            writeSignal = new Signal();
-            readPromise = new Future<ReadResult>();
+            WriteSignal = new Signal();
+            ReadPromise = new Future<ReadResult>();
         }
 
         public Memory<byte> Memory => this.writingHeadMemory;
@@ -59,22 +57,25 @@ namespace CustomPipelines
                    this.readHead, this.readHeadIdx,
                    this.readTail, this.readTailIdx);
         
+       
+        public long UnconsumedBytes  => this.unconsumedBytes;
+        public bool CheckReadable() 
+            => this.unconsumedBytes >= this.readTargetBytes;
+        public bool CheckWritingOutOfRange(int bytes) 
+            => (uint)bytes > (uint)this.writingHeadMemory.Length;
+        public bool CheckAnyUncommittedBytes() 
+            => this.uncommittedBytes > 0;
+        public bool CheckWritable(int sizeHint)
+            => this.writingHeadMemory.Length >= sizeHint;
+
+        // ======================================================== Callback
+
         public bool CanWrite { get; set; }
         public bool CanRead { get; set; }
 
-        public long GetUnconsumedBytes() => this.unconsumedBytes;
-        public bool CheckReadable() => this.unconsumedBytes >= this.readTargetBytes;
-        public bool CheckWritingOutOfRange(int bytes) 
-            => (uint)bytes > (uint)this.writingHeadMemory.Length;
-        public bool CheckAnyUncommittedBytes() => this.uncommittedBytes > 0;
-        public bool CheckAnyReadableBytes() 
-            => (this.readHead != this.readTail)||(this.readHeadIdx != this.readTailIdx);
-        public bool CheckWriterMemoryInvalid(int sizeHint)
-            => this.writingHeadMemory.Length <= sizeHint;
-
         public void SetResult(ReadResult result)
         {
-            this.readPromise.SetResult(result);
+            this.ReadPromise.SetResult(result);
             this.CanRead = true;
         }
         public void RegisterTarget(int targetBytes)
@@ -83,44 +84,131 @@ namespace CustomPipelines
             this.CanRead = false;
         }
 
-        public void Reset()
-        {
-            this.readTailIdx = 0;
-            this.readHeadIdx = 0;
-            this.lastExaminedIndex = -1;
-            this.uncommittedBytes = 0;
-            this.unconsumedBytes = 0;
-            this.readTargetBytes = -1;
-            this.CanWrite = true;
-            this.CanRead = true;
-        }
-
-        public void Complete()
-        {
-            // 세그먼트 전부 반환
-            CustomBufferSegment? segment = readHead ?? readTail;
-            while (segment != null)
-            {
-                CustomBufferSegment returnSegment = segment;
-                segment = segment.NextSegment;
-
-                returnSegment.ResetMemory();
-            }
-
-            this.writingHead = null;
-            this.writingHeadMemory = default;
-            this.readHead = null;
-            this.readTail = null;
-            this.lastExaminedIndex = -1;
-            this.readTargetBytes = -1;
-        }
+        // ======================================================== Advance & Commit
 
         public void Advance(int bytesWritten)
         {
             this.uncommittedBytes += bytesWritten;
             this.writingHeadBytesBuffered += bytesWritten;
             this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
+
+            WriteSignal.Reset();
         }
+        
+        public bool Commit()
+        {
+            if (this.writingHead == null)
+            {
+                throw new NullReferenceException("writingHead is null");
+            }
+
+            // Advance로 인한 구간 증가 적용
+            this.CommitWritingHead();
+
+            // Flush로 인한 read 구간 증가 적용 
+            this.readTail = this.writingHead;
+            this.readTailIdx = this.writingHead.End;
+
+            var oldLength = this.unconsumedBytes;
+            this.unconsumedBytes += this.uncommittedBytes;
+            this.uncommittedBytes = 0;
+
+            if (this.options.CheckPauseWriter(oldLength, this.unconsumedBytes))
+            {
+                this.CanWrite = false;
+            }
+            else
+            {
+                this.WriteSignal.Set();
+            }
+
+            return this.CanWrite;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void CommitWritingHead()
+        {
+            this.writingHead.End += this.writingHeadBytesBuffered;
+            this.writingHeadBytesBuffered = 0;
+        }
+
+        // ======================================================== Allocate
+
+        public void AllocateWriteHead(int sizeHint)
+        {
+            if (this.CheckWritable(sizeHint))
+            {
+                return;
+            }
+
+            if (this.writingHead == null)
+            {
+                CustomBufferSegment newSegment = AllocateSegment(sizeHint);
+
+                this.writingHead = this.readHead = this.readTail = newSegment;
+                this.lastExaminedIndex = 0;
+            }
+            else 
+            {
+                this.CommitWritingHead();   // 써 놓은거 커밋해서 
+
+                CustomBufferSegment newSegment = AllocateSegment(sizeHint);
+
+                this.writingHead!.SetNext(newSegment);
+                this.writingHead = newSegment;
+            }
+        }
+
+        private CustomBufferSegment AllocateSegment(int sizeHint)
+        {
+            CustomBufferSegment newSegment = this.customBufferSegmentPool.TryPop();
+
+            int sizeToRequest = Math.Max(this.options.MinimumSegmentSize, sizeHint);
+
+            newSegment.SetOwnedMemory(ArrayPool<byte>.Shared.Rent(sizeToRequest));
+
+            this.writingHeadMemory = newSegment.AvailableMemory;
+
+            return newSegment;
+        }
+
+        // 큰 쓰기 작업을 해야할 때 추가적인 세그먼트 할당이 필요하면 진행
+        public void WriteMultiSegment(ReadOnlySpan<byte> source)
+        {
+            if (this.writingHead == null)
+            {
+                throw new NullReferenceException("writingHead is null");
+            }
+            
+            var destination = this.writingHeadMemory.Span;
+
+            while (true)
+            {
+                var writable = Math.Min(destination.Length, source.Length);
+                source[..writable].CopyTo(destination);
+                source = source[writable..];
+                Advance(writable);
+
+                if (source.Length == 0)
+                {
+                    break;
+                }
+
+                this.writingHead!.End += writable;
+                this.writingHeadBytesBuffered = 0;
+
+                // 메모리 풀 사용을 위해 할당만 요청
+                var newSegment = AllocateSegment(0);
+
+                this.writingHead!.SetNext(newSegment);
+                this.writingHead = newSegment;
+
+                destination = this.writingHeadMemory.Span;
+            }
+        }
+
+
+        // ======================================================== AdvanceTo
 
         public void AdvanceTo(ref SequencePosition startPosition, ref SequencePosition endPosition)
         {
@@ -130,9 +218,9 @@ namespace CustomPipelines
             var examinedIndex = endPosition.GetInteger();
 
             // Throw if examined < consumed
-            if (consumedSegment != null && examinedSegment != null && 
+            if (consumedSegment != null && examinedSegment != null &&
                 CustomBufferSegment.IsInvalidLength(
-                consumedSegment, consumedIndex, 
+                consumedSegment, consumedIndex,
                     examinedSegment, examinedIndex))
             {
                 throw new InvalidOperationException();
@@ -177,7 +265,7 @@ namespace CustomPipelines
 
             this.CanWrite = true;
 
-            this.writeSignal.Set();
+            this.WriteSignal.Set();
 
             return;
         }
@@ -187,7 +275,7 @@ namespace CustomPipelines
         {
             CustomBufferSegment? returnStart = null;
             CustomBufferSegment? returnEnd = null;
-            
+
             if (consumedSegment == null)
             {
                 return;
@@ -249,7 +337,6 @@ namespace CustomPipelines
             }
         }
 
-
         private void MoveReturnEndToNextBlock(ref CustomBufferSegment? returnEnd)
         {
             var nextBlock = returnEnd!.NextSegment;
@@ -265,107 +352,38 @@ namespace CustomPipelines
             returnEnd = nextBlock;
         }
 
-        public bool Commit()
+        // ======================================================== Complete
+        public void Reset()
         {
-            if (this.writingHead == null)
-            {
-                throw new NullReferenceException("writingHead is null");
-            }
-
-            // Advance로 인한 구간 증가 적용
-            this.CommitWritingHead();
-
-            // Flush로 인한 read 구간 증가 적용 
-            this.readTail = this.writingHead;
-            this.readTailIdx = this.writingHead.End;
-
-            var oldLength = this.unconsumedBytes;
-            this.unconsumedBytes += this.uncommittedBytes;
+            this.readTailIdx = 0;
+            this.readHeadIdx = 0;
+            this.lastExaminedIndex = -1;
             this.uncommittedBytes = 0;
-
-            if (this.options.CheckPauseWriter(oldLength, this.unconsumedBytes))
-            {
-                this.CanWrite = false;
-            }
-
-            return this.CanWrite;
+            this.unconsumedBytes = 0;
+            this.readTargetBytes = -1;
+            this.CanWrite = true;
+            this.CanRead = true;
         }
 
-        public void AllocateWriteHead(int sizeHint)
+        public void Complete()
         {
-            if (this.writingHead == null)
+            // 세그먼트 전부 반환
+            CustomBufferSegment? segment = readHead ?? readTail;
+            while (segment != null)
             {
-                CustomBufferSegment newSegment = AllocateSegment(sizeHint);
+                CustomBufferSegment returnSegment = segment;
+                segment = segment.NextSegment;
 
-                this.writingHead = this.readHead = this.readTail = newSegment;
-                this.lastExaminedIndex = 0;
+                returnSegment.ResetMemory();
             }
-            else 
-            {
-                this.CommitWritingHead();
 
-                CustomBufferSegment newSegment = AllocateSegment(sizeHint);
-
-                this.writingHead!.SetNext(newSegment);
-                this.writingHead = newSegment;
-            }
+            this.writingHead = null;
+            this.writingHeadMemory = default;
+            this.readHead = null;
+            this.readTail = null;
+            this.lastExaminedIndex = -1;
+            this.readTargetBytes = -1;
         }
 
-        private CustomBufferSegment AllocateSegment(int sizeHint)
-        {
-            Debug.Assert(sizeHint >= 0);
-            CustomBufferSegment newSegment = this.customBufferSegmentPool.TryPop();
-
-            int sizeToRequest = Math.Max(this.options.MinimumSegmentSize, sizeHint);
-
-            newSegment.SetOwnedMemory(ArrayPool<byte>.Shared.Rent(sizeToRequest));
-
-            this.writingHeadMemory = newSegment.AvailableMemory;
-
-            return newSegment;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void CommitWritingHead()
-        {
-            Debug.Assert(this.writingHead != null);
-            this.writingHead.End += this.writingHeadBytesBuffered;
-            this.writingHeadBytesBuffered = 0;
-        }
-
-        // 큰 쓰기 작업을 해야할 때 추가적인 세그먼트 할당이 필요하면 진행
-        public void WriteMultiSegment(ReadOnlySpan<byte> source)
-        {
-            if (this.writingHead == null)
-            {
-                throw new NullReferenceException("writingHead is null");
-            }
-            
-            var destination = this.writingHeadMemory.Span;
-
-            while (true)
-            {
-                var writable = Math.Min(destination.Length, source.Length);
-                source[..writable].CopyTo(destination);
-                source = source[writable..];
-                Advance(writable);
-
-                if (source.Length == 0)
-                {
-                    break;
-                }
-
-                this.writingHead!.End += writable;
-                this.writingHeadBytesBuffered = 0;
-
-                // 메모리 풀 사용을 위해 할당만 요청
-                var newSegment = AllocateSegment(0);
-
-                this.writingHead!.SetNext(newSegment);
-                this.writingHead = newSegment;
-
-                destination = this.writingHeadMemory.Span;
-            }
-        }
     }
 }

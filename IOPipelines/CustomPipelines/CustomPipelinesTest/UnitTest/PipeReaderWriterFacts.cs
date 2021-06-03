@@ -243,13 +243,13 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void ReaderShouldNotGetUnflushedBytes()
         {
-            // TryWrite 10 and flush
+            // Write 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
 
-            // TryWrite 9
+            // Write 9
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
 
-            // TryWrite 8
+            // Write 8
             _pipe.Write(new byte[] { 0, 0, 0, 8 });
 
             // Make sure we don't see it yet
@@ -288,13 +288,13 @@ namespace CustomPipelinesTest
             _pipe.Write(paddingBytes);
             _pipe.Flush();
 
-            // TryWrite 10 and flush
+            // Write 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
 
-            // TryWrite 9
+            // Write 9
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
 
-            // TryWrite 8
+            // Write 8
             _pipe.Write(new byte[] { 0, 0, 0, 8 });
 
             // Make sure we don't see it yet
@@ -321,10 +321,10 @@ namespace CustomPipelinesTest
         [TestMethod]
         public async Task ReaderShouldNotGetUnflushedBytesWithAppend()
         {
-            // TryWrite 10 and flush
+            // Write 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
 
-            // TryWrite Hello to another pipeline and get the buffer
+            // Write Hello to another pipeline and get the buffer
             byte[] bytes = Encoding.ASCII.GetBytes("Hello");
 
             var c2 = new CustomPipe(new CustomPipeOptions());
@@ -333,7 +333,7 @@ namespace CustomPipelinesTest
 
             Assert.AreEqual(bytes.Length, c2Buffer.Length);
 
-            // TryWrite 9 to the buffer
+            // Write 9 to the buffer
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
 
             // Append the data from the other pipeline

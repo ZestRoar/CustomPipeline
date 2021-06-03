@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace CustomPipelines
 {
+#nullable enable
     internal sealed class CustomBufferSegment : ReadOnlySequenceSegment<byte>           // 디폴트 메모리 풀 사용할 것이므로 메모리 오너 관련 멤버들 삭제함
     {
         private byte[]? array;

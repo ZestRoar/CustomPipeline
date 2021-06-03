@@ -32,7 +32,7 @@ namespace CustomPipelines
         }
         public ReadResult Flush()
         {
-            return new ReadResult(false, CommitWrittenBytes());
+            return new ReadResult(false, false);
         }
     }
 }

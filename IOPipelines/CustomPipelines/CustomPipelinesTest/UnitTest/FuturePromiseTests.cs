@@ -9,21 +9,55 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CustomPipelinesTest.UnitTest
 {
-    class FuturePromiseTests
+    [TestClass]
+    public class FuturePromiseTests
     {
         private CustomPipe pipeline = new();
+
+
+        [TestMethod]
+        public void FuturePromiseTest()
+        {
+            bool isPromiseSet = false;
+            void ReadCallback()
+            {
+                isPromiseSet = true;
+            }
+
+            TestCustomPipe pipe = new TestCustomPipe(new CustomPipeOptions());
+            
+            if (pipe.Reader.TryRead(out var result, 5))
+            {
+                 ReadCallback();
+            }
+            else
+            {
+                var buffer = result.Buffer.Value;
+                pipe.Reader.Read(5)
+                    .Then((result) =>
+                    {
+                        ReadCallback();
+                    });
+            }
+
+            Assert.IsFalse(isPromiseSet);
+
+            pipe.GetWriterMemory(5);
+            pipe.TryAdvance(5);
+            Assert.IsTrue(isPromiseSet);
+        }
 
         [TestMethod]
         public void ProcessSend()
         {
-            if (this.pipeline.TryRead(out var result, 5))
+            if (this.pipeline.Reader.TryRead(out var result, 5))
             {
                 this.SendToSocket(result.Buffer.Value);
             }
             else
             {
                 var buffer = result.Buffer.Value;
-                this.pipeline.Read(5)
+                this.pipeline.Reader.Read(5)
                     .Then((result) =>
                     {
                         this.SendToSocket(buffer);
@@ -34,7 +68,7 @@ namespace CustomPipelinesTest.UnitTest
         //스트림 내용 그대로 소켓에 Send 하는 작업
         public void SendToSocket(ReadOnlySequence<byte> buffer)
         {
-            this.pipeline.AdvanceTo(buffer.End);
+            this.pipeline.Reader.AdvanceTo(buffer.End);
             this.ProcessSend();
         }
 
