@@ -28,8 +28,7 @@ namespace CustomPipelines
                 Console.WriteLine($"[{socket.RemoteEndPoint}]: connected");
 
                 CustomPipe pipe = new CustomPipe();
-                pipe.RegisterWriteCallback(writeAction);
-                pipe.RegisterReadCallback(readAction, 0);
+                pipe.RegisterTarget(0);
 
                 SequencePosition? readPosition = null;
 

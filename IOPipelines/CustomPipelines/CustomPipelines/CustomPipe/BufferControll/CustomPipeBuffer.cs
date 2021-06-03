@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Mad.Core.Concurrent.Synchronization;
 
 namespace CustomPipelines
 {
@@ -36,21 +37,20 @@ namespace CustomPipelines
 
         // 콜백 등록 용도
         private int readTargetBytes;
-        private readonly StateCallback readCallback;
-        private readonly StateCallback writeCallback;
+        internal Signal writeSignal;
+        internal Future<ReadResult> readPromise;
 
 
         public CustomPipeBuffer(CustomPipeOptions options)
         {
             this.options = options;
             this.customBufferSegmentPool = new CustomBufferSegmentStack(options);
-            this.readCallback = new StateCallback();
-            this.writeCallback = new StateCallback();
             this.readTargetBytes = -1;
             this.CanWrite = true;
             this.CanRead = true;
+            writeSignal = new Signal();
+            readPromise = new Future<ReadResult>();
         }
-
 
         public Memory<byte> Memory => this.writingHeadMemory;
         public ReadOnlySequence<byte> ReadBuffer 
@@ -63,7 +63,7 @@ namespace CustomPipelines
         public bool CanRead { get; set; }
 
         public long GetUnconsumedBytes() => this.unconsumedBytes;
-        public bool CheckReadable() => readTargetBytes>=0 && this.unconsumedBytes >= this.readTargetBytes;
+        public bool CheckReadable() => this.unconsumedBytes >= this.readTargetBytes;
         public bool CheckWritingOutOfRange(int bytes) 
             => (uint)bytes > (uint)this.writingHeadMemory.Length;
         public bool CheckAnyUncommittedBytes() => this.uncommittedBytes > 0;
@@ -72,16 +72,15 @@ namespace CustomPipelines
         public bool CheckWriterMemoryInvalid(int sizeHint)
             => this.writingHeadMemory.Length <= sizeHint;
 
-        public void RegisterReadCallback(Action action, int targetBytes, bool repeat = false)
+        public void SetResult(ReadResult result)
         {
-            this.readCallback.SetCallback(action, repeat);
+            this.readPromise.SetResult(result);
+            this.CanRead = true;
+        }
+        public void RegisterTarget(int targetBytes)
+        {
             this.readTargetBytes = targetBytes;
             this.CanRead = false;
-        }
-
-        public void RegisterWriteCallback(Action action, bool repeat = true)
-        {
-            this.writeCallback.SetCallback(action, repeat);
         }
 
         public void Reset()
@@ -92,8 +91,6 @@ namespace CustomPipelines
             this.uncommittedBytes = 0;
             this.unconsumedBytes = 0;
             this.readTargetBytes = -1;
-            this.readCallback.SetCallback(null, false);
-            this.writeCallback.SetCallback(null, false);
             this.CanWrite = true;
             this.CanRead = true;
         }
@@ -116,8 +113,6 @@ namespace CustomPipelines
             this.readTail = null;
             this.lastExaminedIndex = -1;
             this.readTargetBytes = -1;
-            this.readCallback.SetCallback(null,false);
-            this.writeCallback.SetCallback(null,false);
         }
 
         public void Advance(int bytesWritten)
@@ -182,7 +177,7 @@ namespace CustomPipelines
 
             this.CanWrite = true;
 
-            this.writeCallback.RunCallback();
+            this.writeSignal.Set();
 
             return;
         }
@@ -270,7 +265,7 @@ namespace CustomPipelines
             returnEnd = nextBlock;
         }
 
-        public void Commit()
+        public bool Commit()
         {
             if (this.writingHead == null)
             {
@@ -288,21 +283,12 @@ namespace CustomPipelines
             this.unconsumedBytes += this.uncommittedBytes;
             this.uncommittedBytes = 0;
 
-            // LengthCheck
-            if (this.CheckReadable())       
-            {
-                this.readCallback.RunCallback();
-                this.CanRead = true;
-                if (readCallback.ActionNotExist)
-                {
-                    this.readTargetBytes = -1;
-                }
-            }
             if (this.options.CheckPauseWriter(oldLength, this.unconsumedBytes))
             {
                 this.CanWrite = false;
             }
 
+            return this.CanWrite;
         }
 
         public void AllocateWriteHead(int sizeHint)

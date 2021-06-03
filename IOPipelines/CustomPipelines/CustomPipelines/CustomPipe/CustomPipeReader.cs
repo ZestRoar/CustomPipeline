@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Threading;
+using Mad.Core.Concurrent.Synchronization;
 
 namespace CustomPipelines
 {
@@ -16,9 +17,9 @@ namespace CustomPipelines
 
         
 
-        public bool TryRead(out StateResult result) => this.readerPipe.TryRead(out result);
+        public bool TryRead(out ReadResult result, int targetBytes) => this.readerPipe.TryRead(out result, targetBytes);
 
-        public bool ReadAsync() => this.readerPipe.Read();
+        public Future<ReadResult> Read(int targetBytes) => this.readerPipe.Read(targetBytes);
 
         public void AdvanceTo(SequencePosition consumed) => this.readerPipe.AdvanceTo(consumed);
 

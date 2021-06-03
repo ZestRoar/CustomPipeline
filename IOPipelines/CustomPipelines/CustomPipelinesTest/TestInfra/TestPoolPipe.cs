@@ -32,12 +32,6 @@ namespace CustomPipelinesTest
             this.pipeState = new CustomPipeState();
         }
 
-        public void RegisterReadCallback(Action action, int targetBytes, bool repeat = true)
-            => this.customBuffer.RegisterReadCallback(action, targetBytes, repeat);
-
-        public void RegisterWriteCallback(Action action, bool repeat = true)
-            => this.customBuffer.RegisterWriteCallback(action, repeat);
-
         public void Advance(int bytes)
         {
             // 쓰기를 한 메모리 이상으로 커밋 불가능
@@ -147,11 +141,11 @@ namespace CustomPipelinesTest
             return true;
         }
 
-        public bool TryRead(out StateResult result)
+        public bool TryRead(out ReadResult result)
         {
             if (this.pipeState.IsReadingCompleted || this.customBuffer.GetUnconsumedBytes() > 0)
             {
-                result = new StateResult(false, this.pipeState.IsWritingCompleted);
+                result = new ReadResult(false, this.pipeState.IsWritingCompleted);
                 return true;
             }
 
@@ -159,15 +153,7 @@ namespace CustomPipelinesTest
             return false;
         }
 
-        public bool Read()
-        {
-            if (!this.customBuffer.CanRead) // 이미 콜백 걸려있음
-                return false;
-
-            this.customBuffer.CanRead = false;
-            return customBuffer.CheckReadable() ? true : false;
-        }
-
+        
         public void Reset()
         {
             if (!disposed)

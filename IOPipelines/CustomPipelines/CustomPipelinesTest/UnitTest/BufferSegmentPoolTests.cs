@@ -58,7 +58,7 @@ namespace CustomPipelinesTest
         {
             int blockCount = CustomPipe.MaxSegmentPoolSize + 1;
 
-            // Write 256 blocks to ensure they get reused
+            // TryWrite 256 blocks to ensure they get reused
             for (int i = 0; i < blockCount; i++)
             {
                 _pipe.WriteEmpty(MaxBufferSize);

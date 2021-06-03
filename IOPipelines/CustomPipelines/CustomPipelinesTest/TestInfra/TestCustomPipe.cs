@@ -30,9 +30,9 @@ namespace CustomPipelines
         {
             return new Span<byte>();
         }
-        public StateResult Flush()
+        public ReadResult Flush()
         {
-            return new StateResult(false, CommitWrittenBytes());
+            return new ReadResult(false, CommitWrittenBytes());
         }
     }
 }

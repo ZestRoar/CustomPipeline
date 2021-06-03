@@ -65,7 +65,7 @@ namespace CustomPipelinesTest
 
             _pipe.Reset();
 
-            Assert.IsFalse(_pipe.TryRead(out StateResult result));
+            Assert.IsFalse(_pipe.TryRead(out ReadResult result));
         }
     }
 }

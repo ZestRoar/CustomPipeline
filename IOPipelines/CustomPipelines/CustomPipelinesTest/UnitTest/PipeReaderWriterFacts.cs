@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CustomPipelines;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ReadResult = System.IO.Pipelines.ReadResult;
 
 namespace CustomPipelinesTest
 {
@@ -58,8 +59,6 @@ namespace CustomPipelinesTest
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.End);
 
-            
-            Assert.IsFalse(_pipe.Read());
 
             bool CheckCallback = false;
 
@@ -67,7 +66,11 @@ namespace CustomPipelinesTest
             {
                 CheckCallback = true;
             }
-            _pipe.RegisterReadCallback(RunCheckCallback, 1);
+
+            Assert.IsFalse(_pipe.TryRead(out var _, 1));
+
+            _pipe.Read(1).Then((result) => { RunCheckCallback(); });
+            
             _pipe.Write(new byte[1]);
             _pipe.Flush();
 
@@ -75,7 +78,7 @@ namespace CustomPipelinesTest
 
             _pipe.AdvanceTo(_pipe.Buffer.End);
 
-            Assert.IsFalse(_pipe.Read());
+            Assert.IsFalse(_pipe.TryRead(out var _, 1));
 
         }
 
@@ -91,7 +94,7 @@ namespace CustomPipelinesTest
             Assert.IsTrue(result.IsCanceled);
             Assert.IsTrue(_pipe.Buffer.IsEmpty);
 
-            Assert.IsFalse(_pipe.Read());
+            Assert.IsFalse(_pipe.TryRead(out var _, 1));
         }
 
         [TestMethod]
@@ -240,13 +243,13 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void ReaderShouldNotGetUnflushedBytes()
         {
-            // Write 10 and flush
+            // TryWrite 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
 
-            // Write 9
+            // TryWrite 9
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
 
-            // Write 8
+            // TryWrite 8
             _pipe.Write(new byte[] { 0, 0, 0, 8 });
 
             // Make sure we don't see it yet
@@ -285,13 +288,13 @@ namespace CustomPipelinesTest
             _pipe.Write(paddingBytes);
             _pipe.Flush();
 
-            // Write 10 and flush
+            // TryWrite 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
 
-            // Write 9
+            // TryWrite 9
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
 
-            // Write 8
+            // TryWrite 8
             _pipe.Write(new byte[] { 0, 0, 0, 8 });
 
             // Make sure we don't see it yet
@@ -318,10 +321,10 @@ namespace CustomPipelinesTest
         [TestMethod]
         public async Task ReaderShouldNotGetUnflushedBytesWithAppend()
         {
-            // Write 10 and flush
+            // TryWrite 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
 
-            // Write Hello to another pipeline and get the buffer
+            // TryWrite Hello to another pipeline and get the buffer
             byte[] bytes = Encoding.ASCII.GetBytes("Hello");
 
             var c2 = new CustomPipe(new CustomPipeOptions());
@@ -330,7 +333,7 @@ namespace CustomPipelinesTest
 
             Assert.AreEqual(bytes.Length, c2Buffer.Length);
 
-            // Write 9 to the buffer
+            // TryWrite 9 to the buffer
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
 
             // Append the data from the other pipeline
@@ -387,11 +390,10 @@ namespace CustomPipelinesTest
                 val.Value = 10;
 
                
-                pipe.RegisterReadCallback(()=>tcs.TrySetResult(val.Value), 99999999);
-                //pipe.Read().OnCompleted(() =>
-                //{
-                //    tcs.TrySetResult(val.Value);
-                //});
+                pipe.Read().Then((result) =>
+                {
+                    tcs.TrySetResult(val.Value);
+                });
 
                 val.Value = 20;
 
