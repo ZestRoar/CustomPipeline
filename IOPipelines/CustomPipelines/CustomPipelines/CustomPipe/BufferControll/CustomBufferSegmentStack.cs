@@ -38,7 +38,7 @@ namespace CustomPipelines
         {
             if (this.size >= this.maxSize)
             {
-                Trace.WriteLine("Segment Stack is Full!");
+                //Trace.WriteLine("Segment Stack is Full!");
                 return false;
             }
 

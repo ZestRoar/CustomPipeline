@@ -56,8 +56,7 @@ namespace CustomPipelines
                : new ReadOnlySequence<byte>(
                    this.readHead, this.readHeadIdx,
                    this.readTail, this.readTailIdx);
-        
-       
+
         public long UnconsumedBytes  => this.unconsumedBytes;
         public bool CheckReadable() 
             => this.unconsumedBytes >= this.readTargetBytes;
@@ -97,9 +96,9 @@ namespace CustomPipelines
         
         public bool Commit()
         {
-            if (this.writingHead == null)
+            if (this.writingHead == null)   // 쓰기버퍼 비어있는 상태로 complete 호출 시 발생
             {
-                throw new NullReferenceException("writingHead is null");
+                return true;
             }
 
             // Advance로 인한 구간 증가 적용

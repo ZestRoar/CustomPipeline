@@ -34,7 +34,7 @@ namespace CustomPipelinesTest.UnitTest
             {
                 var buffer = result.Buffer.Value;
                 pipe.Reader.Read(5)
-                    .Then((result) =>
+                    .Then((readResult) =>
                     {
                         ReadCallback();
                     });

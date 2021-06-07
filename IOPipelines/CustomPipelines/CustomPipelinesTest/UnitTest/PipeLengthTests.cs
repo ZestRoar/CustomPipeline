@@ -13,7 +13,7 @@ namespace CustomPipelinesTest
         public PipeLengthTests()
         {
             _pipe = new TestCustomPipe(new CustomPipeOptions(0,0, 100));
-            originPipe = new Pipe(new PipeOptions(default,null,null,0,0));
+            originPipe = new Pipe(new PipeOptions(default,null,null,0,0, 100));
         }
 
         public void Dispose()
@@ -25,6 +25,15 @@ namespace CustomPipelinesTest
 
         private readonly TestCustomPipe _pipe;
         private readonly Pipe originPipe;
+
+        [TestMethod]
+        public void CombinedByteByByteTest()
+        {
+            ByteByByteTestOriginSync();
+            ByteByByteTestZ();
+            ByteByByteTestOrigin();
+            int i = 0;
+        }
 
         [TestMethod]
         public async Task ByteByByteTestOrigin()
@@ -39,7 +48,7 @@ namespace CustomPipelinesTest
             }
             
             await originPipe.Writer.FlushAsync();
-            
+
             for (int i = 1024 * 1024 - 1; i >= 0; i--)
             {
                 var result = await originPipe.Reader.ReadAsync();
@@ -65,7 +74,7 @@ namespace CustomPipelinesTest
             }
             
             originPipe.Writer.FlushAsync();
-            
+
             for (int i = 1024 * 1024 - 1; i >= 0; i--)
             {
                 var result = originPipe.Reader.ReadAsync().Result;
@@ -81,7 +90,7 @@ namespace CustomPipelinesTest
 
 
         [TestMethod]
-        public void ByteByByteTest()                       
+        public void ByteByByteTestZ()                       
         {
             for (var i = 1; i <= 1024 * 1024; ++i)
             {
@@ -89,16 +98,15 @@ namespace CustomPipelinesTest
                 _pipe.Advance(1);
                 _pipe.Flush();
 
-                Assert.AreEqual(i, _pipe.Length);
+                //Assert.AreEqual(i, _pipe.Length);
             }
             
             _pipe.Flush();
             
             for (int i = 1024 * 1024 - 1; i >= 0; --i)
             {
-
-                //_pipe.Read();
-                var consumed = _pipe.Buffer.Slice(1).Start;
+                _pipe.TryRead(out var result, 1);
+                var consumed = result.Buffer.Value.Slice(1).Start;
 
                 //Assert.AreEqual(i + 1, _pipe.Buffer.Length);
 
@@ -106,7 +114,7 @@ namespace CustomPipelinesTest
 
                 //Assert.AreEqual(i, _pipe.Length);
             }
-        
+
         }
 
         [TestMethod]

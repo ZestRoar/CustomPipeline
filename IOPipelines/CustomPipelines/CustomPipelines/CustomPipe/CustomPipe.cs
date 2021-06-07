@@ -184,6 +184,11 @@ namespace CustomPipelines
             return this.customBuffer.ReadPromise;
         }
 
+        internal void ReadAsync()
+        {
+            return;
+        }
+
         public void AdvanceToEnd()
         {
             var endPosition = this.customBuffer.ReadBuffer.End;
