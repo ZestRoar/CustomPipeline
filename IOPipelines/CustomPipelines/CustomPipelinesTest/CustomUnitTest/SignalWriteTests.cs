@@ -11,7 +11,7 @@ namespace CustomPipelinesTest
         private CustomPipe pipeline = new();
         private SocketAsyncEventArgs receiveArgs = new();
         private Socket socket;
-
+        private int count = 5;
         [TestMethod]
         public void DirectSignalTest()
         {
@@ -98,6 +98,9 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void ProcessReceive()
         {
+            if (--count < 0)
+                return;
+
             var memory = this.pipeline.Writer.GetMemory(1);
             if (memory == null)
             {
@@ -112,12 +115,16 @@ namespace CustomPipelinesTest
             signal.OnCompleted(() =>
             {
                 this.ProcessReceive();
+                this.pipeline.AdvanceToEnd();
             });
         }
 
         [TestMethod]
         public void ProcessReceive2()
         {
+            if (--count < 0)
+                return;
+
             var memory = this.pipeline.Writer.GetMemory(1);
             if (memory == null)
             {
@@ -133,6 +140,7 @@ namespace CustomPipelinesTest
                     .OnCompleted(() =>
                     {
                         this.ProcessReceive2();
+                        this.pipeline.AdvanceToEnd();
                     });
             }
             else

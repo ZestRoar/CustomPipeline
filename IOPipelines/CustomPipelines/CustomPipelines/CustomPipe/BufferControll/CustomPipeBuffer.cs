@@ -257,14 +257,11 @@ namespace CustomPipelines
 
             Debug.Assert(this.unconsumedBytes >= 0, "GetUnconsumedBytes has gone negative");
 
-            if ((this.CanWrite == true) || !this.options.CheckResumeWriter(oldLength, unconsumedBytes))
+            if ((this.CanWrite == false) && this.options.CheckResumeWriter(oldLength, unconsumedBytes))
             {
-                return;
+                this.CanWrite = true;
+                this.WriteSignal.Set();
             }
-
-            this.CanWrite = true;
-
-            this.WriteSignal.Set();
 
             return;
         }
