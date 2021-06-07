@@ -8,7 +8,7 @@ using Mad.Core.Concurrent.Synchronization;
 
 namespace CustomPipelines
 {
-    internal class CustomPipe
+    internal class CustomPipe : ICustomPipeWriter, ICustomPipeReader
     {
 #nullable enable
         internal const int MaxSegmentPoolSize = 256;
@@ -31,16 +31,10 @@ namespace CustomPipelines
         {
             this.customBuffer = new CustomPipeBuffer(options ?? CustomPipeOptions.Default);
             this.pipeState = new CustomPipeState();
-
-            Reader = new CustomPipeReader(this);
-            Writer = new CustomPipeWriter(this);
         }
 
         public long Length => customBuffer.UnconsumedBytes;
         public ReadOnlySequence<byte> Buffer => customBuffer.ReadBuffer;
-
-        public CustomPipeReader Reader { get; }
-        public CustomPipeWriter Writer { get; }
 
         public void RegisterTarget(int targetBytes)
             => this.customBuffer.RegisterTarget(targetBytes);
@@ -204,11 +198,6 @@ namespace CustomPipelines
             this.RegisterTarget(targetBytes);
 
             return this.customBuffer.ReadPromise;
-        }
-
-        internal void ReadAsync()
-        {
-            return;
         }
 
         public void AdvanceToEnd()

@@ -4,18 +4,13 @@ using Mad.Core.Concurrent.Synchronization;
 
 namespace CustomPipelines
 {
-    internal class CustomPipeWriter
+    internal interface ICustomPipeWriter
     {
 #nullable enable
-        private readonly CustomPipe writerPipe;
-        public CustomPipeWriter(CustomPipe pipe)
-        {
-            this.writerPipe = pipe;
-        }
-        public void Complete(Exception? exception = null) => this.writerPipe.CompleteWriter(exception);
-        public bool TryAdvance(int bytes) => this.writerPipe.TryAdvance(bytes);
-        public Signal Advance(int bytes) => this.writerPipe.Advance(bytes);
-        public Memory<byte>? GetMemory(int sizeHint = 0) => this.writerPipe.GetWriterMemory(sizeHint);
-        public bool WriteAsync(ReadOnlyMemory<byte> source) => this.writerPipe.WriteAndCommit(source);
+        public void CompleteWriter(Exception? exception = null);
+        public bool TryAdvance(int bytes);
+        public Signal Advance(int bytes);
+        public Memory<byte>? GetWriterMemory(int sizeHint = 0);
+        public bool Write(ReadOnlyMemory<byte> source);
     }
 }

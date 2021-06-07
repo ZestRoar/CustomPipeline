@@ -1,8 +1,10 @@
 ﻿using System;
+using System.IO.Pipelines;
 using System.IO.Pipes;
 using System.Threading.Tasks;
 using CustomPipelines;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ReadResult = CustomPipelines.ReadResult;
 
 namespace CustomPipelinesTest
 {
@@ -31,36 +33,39 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void FlushAsyncAwaitableCompletesWhenReaderAdvancesUnderLow()
         {
-            CustomPipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
+            _pipe.WriteEmpty(PauseWriterThreshold);
 
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
+            _pipe.Flush();
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            ReadResult result = _pipe.Reader.ReadAsync().GetAwaiter().GetResult();
-            SequencePosition consumed = result.Buffer.GetPosition(33);
+            _pipe.TryRead(out var result);
+            SequencePosition consumed = result.Buffer.Value.GetPosition(33);
             _pipe.Reader.AdvanceTo(consumed, consumed);
 
-            Assert.IsTrue(flushAsync.IsCompleted);
-            FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
-            Assert.IsFalse(flushResult.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+
+            //FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
+
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
         public void FlushAsyncAwaitableCompletesWhenReaderAdvancesExaminedUnderLow()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
+            _pipe.WriteEmpty(PauseWriterThreshold);
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            _pipe.Flush();
 
-            ReadResult result = _pipe.Reader.ReadAsync().GetAwaiter().GetResult();
-            SequencePosition examined = result.Buffer.GetPosition(33);
-            _pipe.Reader.AdvanceTo(result.Buffer.Start, examined);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            Assert.IsTrue(flushAsync.IsCompleted);
-            FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
-            Assert.IsFalse(flushResult.IsCompleted);
+            _pipe.TryRead(out var result);
+            SequencePosition examined = result.Buffer.Value.GetPosition(33);
+            _pipe.Reader.AdvanceTo(result.Buffer.Value.Start, examined);
+
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            //FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
@@ -68,140 +73,138 @@ namespace CustomPipelinesTest
         {
             const int loops = 5;
 
-            async Task WriteLoopAsync()
+            //async Task WriteLoopAsync()
             {
                 for (int i = 0; i < loops; i++)
                 {
-                    _pipe.Writer.WriteEmpty(PauseWriterThreshold);
+                    _pipe.WriteEmpty(PauseWriterThreshold);
 
-                    ValueTask<FlushResult> flushTask = _pipe.Writer.FlushAsync();
+                    _pipe.Flush();
 
-                    Assert.IsFalse(flushTask.IsCompleted);
+                    Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-                    await flushTask;
+                    //await flushTask;
                 }
 
                 _pipe.Writer.Complete();
             }
 
-            Task writingTask = WriteLoopAsync();
+            //Task writingTask = WriteLoopAsync();
 
             while (true)
             {
-                ReadResult result = await _pipe.Reader.ReadAsync();
+                _pipe.TryRead(out var result, 1);
 
                 if (result.IsCompleted)
                 {
-                    _pipe.Reader.AdvanceTo(result.Buffer.End);
+                    _pipe.Reader.AdvanceTo(result.Buffer.Value.End);
 
-                    Assert.AreEqual(PauseWriterThreshold * loops, result.Buffer.GetUnconsumedBytes);
+                    Assert.AreEqual(PauseWriterThreshold * loops, result.Buffer.Value.Length);
                     break;
                 }
 
-                _pipe.Reader.AdvanceTo(result.Buffer.Start, result.Buffer.End);
+                _pipe.Reader.AdvanceTo(result.Buffer.Value.Start, result.Buffer.Value.End);
             }
 
-            await writingTask;
+            //await writingTask;
         }
 
         [TestMethod]
         public void FlushAsyncAwaitableDoesNotCompletesWhenReaderAdvancesUnderHight()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            ReadResult result = _pipe.Reader.ReadAsync().GetAwaiter().GetResult();
-            SequencePosition consumed = result.Buffer.GetPosition(ResumeWriterThreshold);
+            _pipe.TryRead(out var result, 1);
+            SequencePosition consumed = result.Buffer.Value.GetPosition(ResumeWriterThreshold);
             _pipe.Reader.AdvanceTo(consumed, consumed);
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
         public void FlushAsyncAwaitableResetsOnCommit()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            ReadResult result = _pipe.Reader.ReadAsync().GetAwaiter().GetResult();
-            SequencePosition consumed = result.Buffer.GetPosition(33);
+            _pipe.TryRead(out var result, 1);
+            SequencePosition consumed = result.Buffer.Value.GetPosition(33);
             _pipe.Reader.AdvanceTo(consumed, consumed);
 
-            Assert.IsTrue(flushAsync.IsCompleted);
-            FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
-            Assert.IsFalse(flushResult.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            //FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            flushAsync = writableBuffer.FlushAsync();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
         public void FlushAsyncReturnsCompletedIfReaderCompletes()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
             _pipe.Reader.Complete();
 
-            Assert.IsTrue(flushAsync.IsCompleted);
-            FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
-            Assert.IsTrue(flushResult.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            _pipe.Flush();
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
 
-            writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            flushAsync = writableBuffer.FlushAsync();
-            flushResult = flushAsync.GetAwaiter().GetResult();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsTrue(flushResult.IsCompleted);
-            Assert.IsTrue(flushAsync.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
         public async Task FlushAsyncReturnsCompletedIfReaderCompletesWithoutAdvance()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsFalse(flushAsync.IsCompleted);
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            ReadResult result = await _pipe.Reader.ReadAsync();
+            _pipe.TryRead(out var result, 1);
             _pipe.Reader.Complete();
 
-            Assert.IsTrue(flushAsync.IsCompleted);
-            FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
-            Assert.IsTrue(flushResult.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            _pipe.Flush();
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
 
-            writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            flushAsync = writableBuffer.FlushAsync();
-            flushResult = flushAsync.GetAwaiter().GetResult();
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
 
-            Assert.IsTrue(flushResult.IsCompleted);
-            Assert.IsTrue(flushAsync.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
         public void FlushAsyncReturnsCompletedTaskWhenSizeLessThenLimit()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(ResumeWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
-            Assert.IsTrue(flushAsync.IsCompleted);
-            FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
-            Assert.IsFalse(flushResult.IsCompleted);
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
+            Assert.IsTrue(_pipe.WriteResult.IsCompleted);
+            _pipe.Flush();
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
         public void FlushAsyncReturnsNonCompletedSizeWhenCommitOverTheLimit()
         {
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            ValueTask<FlushResult> flushAsync = writableBuffer.FlushAsync();
-            Assert.IsFalse(flushAsync.IsCompleted);
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            _pipe.Flush();
+            Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
 
         [TestMethod]
@@ -209,12 +212,10 @@ namespace CustomPipelinesTest
         {
             _pipe.Reader.Complete(new InvalidOperationException("Reader failed"));
 
-            PipeWriter writableBuffer = _pipe.Writer.WriteEmpty(PauseWriterThreshold);
-            InvalidOperationException invalidOperationException =
-                await Assert.ThrowsAsync<InvalidOperationException>(async () => await writableBuffer.FlushAsync());
+            _pipe.WriteEmpty(PauseWriterThreshold);
+            InvalidOperationException invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Flush());
             Assert.AreEqual("Reader failed", invalidOperationException.Message);
-            invalidOperationException =
-                await Assert.ThrowsAsync<InvalidOperationException>(async () => await writableBuffer.FlushAsync());
+            invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Flush());
             Assert.AreEqual("Reader failed", invalidOperationException.Message);
         }
     }
