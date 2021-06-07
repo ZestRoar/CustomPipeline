@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using Mad.Core.Concurrent.Synchronization;
 
 [assembly: InternalsVisibleTo("CustomPipelinesTest")]
@@ -17,8 +18,9 @@ namespace CustomPipelines
         private readonly CustomPipeState pipeState;
 
         // 처리 관련
-        private bool disposed;
-        private Exception? completeException;
+        private bool disposed = false;
+        private object? _state;
+        private ExceptionDispatchInfo? completeException;
 
         public CustomPipe() : this(CustomPipeOptions.Default)
         {
@@ -99,7 +101,7 @@ namespace CustomPipelines
             return isWritable;
         }
 
-        public Memory<byte>? GetWriterMemory(int sizeHint = 0)
+        public Memory<byte>? GetWriterMemory(int sizeHint = 1)
         {
             if (this.pipeState.IsWritingCompleted)
             {
@@ -130,13 +132,21 @@ namespace CustomPipelines
 
         public bool Write(ReadOnlyMemory<byte> sourceMemory)
         {
+            if (this.completeException != null)
+            {
+                this.completeException.Throw();
+            }
+
             if (!this.customBuffer.CanWrite)        // pause 상태
             {
                 return false;
             }
 
             // 메모리 없으면 할당
-            this.customBuffer.AllocateWriteHead(0);
+            if (this.customBuffer.Memory.Length == 0)
+            {
+                this.customBuffer.AllocateWriteHead(sourceMemory.Length);
+            }
 
             if (sourceMemory.Length <= this.customBuffer.Memory.Length)
             {
@@ -149,18 +159,33 @@ namespace CustomPipelines
                 this.customBuffer.WriteMultiSegment(sourceMemory.Span);   // 대용량 쓰기
             }
 
-            this.CommitWrittenBytes();
-
             return true;
         }
 
+        public bool WriteAndCommit(ReadOnlyMemory<byte> sourceMemory)
+        {
+            var result = Write(sourceMemory);
+            this.CommitWrittenBytes();
+            return result;
+        }
+
+        public void Flush() => this.CommitWrittenBytes();
 
         // ===================================================================== Reader 
 
         public bool TryRead(out ReadResult result, int targetBytes = 0)
         {
+            completeException?.Throw();
+
+            if (this.pipeState.IsReadingCompleted)
+            {
+                throw new InvalidOperationException("No Reading Allowed");
+            }
+
             result = new ReadResult(this.customBuffer.ReadBuffer,
-                this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
+                this.pipeState.IsReadingCanceled, this.pipeState.IsWritingCompleted);
+
+            this.pipeState.ResumeRead();
 
             this.customBuffer.RegisterTarget(targetBytes);
 
@@ -169,14 +194,11 @@ namespace CustomPipelines
 
         public Future<ReadResult> Read(int targetBytes = 0)
         {
+            completeException?.Throw();
+
             if (this.pipeState.IsReadingCompleted)
             {
                 throw new InvalidOperationException("No Reading Allowed");
-            }
-
-            if (this.completeException != null)
-            {
-                throw this.completeException;
             }
 
             this.RegisterTarget(targetBytes);
@@ -229,10 +251,13 @@ namespace CustomPipelines
         {
             this.pipeState.CompleteRead();
 
-            completeException = exception;
+            if (exception != null)
+            {
+                completeException = ExceptionDispatchInfo.Capture(exception);
+            }
 
             // 쓰기 중인 버퍼가 있으면 취소 처리하고 정리해야함
-            if (this.customBuffer.CanWrite)
+            if (this.pipeState.IsWritingCompleted)
             {
                 this.CompletePipe();
             }
@@ -241,11 +266,15 @@ namespace CustomPipelines
         public void CompleteWriter(Exception exception = null)
         {
             this.CommitWrittenBytes(); // 보류 중인 버퍼 커밋
+            this.pipeState.CompleteWrite();
 
-            completeException = exception;
+            if (exception != null)
+            {
+                completeException = ExceptionDispatchInfo.Capture(exception);
+            }
 
             // 읽기 중인 버퍼가 있으면 콜백 처리하고 정리해야함
-            if (this.customBuffer.CanRead)     
+            if (this.pipeState.IsReadingCompleted)     
             {
                 this.CompletePipe();
             }

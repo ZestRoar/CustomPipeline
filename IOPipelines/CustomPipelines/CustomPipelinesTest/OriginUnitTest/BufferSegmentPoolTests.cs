@@ -28,7 +28,7 @@ namespace CustomPipelinesTest
         public void BufferSegmentsAreReused()
         {
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.Read();
 
             var oldSegment = _pipe.Buffer.End.GetObject();
@@ -41,7 +41,7 @@ namespace CustomPipelinesTest
 
             // 반환된 세그먼트가 사용되야 함
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.Read();
 
             var newSegment = _pipe.Buffer.End.GetObject();
@@ -63,7 +63,7 @@ namespace CustomPipelinesTest
             {
                 _pipe.WriteEmpty(MaxBufferSize);
             }
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.Read();
 
             List<ReadOnlySequenceSegment<byte>> oldSegments = GetSegments(_pipe.Buffer);
@@ -77,7 +77,7 @@ namespace CustomPipelinesTest
                 _pipe.WriteEmpty(MaxBufferSize);
             }
 
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.Read();
 
             List<ReadOnlySequenceSegment<byte>> newSegments = GetSegments(_pipe.Buffer);

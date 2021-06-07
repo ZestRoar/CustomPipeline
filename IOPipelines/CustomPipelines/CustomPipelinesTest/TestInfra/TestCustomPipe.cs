@@ -30,8 +30,9 @@ namespace CustomPipelines
         {
             return new Span<byte>();
         }
-        public ReadResult Flush()
+        public ReadResult FlushAsync()
         {
+            Flush();
             return new ReadResult(false, false);
         }
     }

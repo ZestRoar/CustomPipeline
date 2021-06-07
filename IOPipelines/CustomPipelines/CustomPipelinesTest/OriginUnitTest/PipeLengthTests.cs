@@ -96,12 +96,12 @@ namespace CustomPipelinesTest
             {
                 _pipe.GetWriterMemory(100);
                 _pipe.Advance(1);
-                _pipe.Flush();
+                _pipe.FlushAsync();
 
                 //Assert.AreEqual(i, _pipe.Length);
             }
             
-            _pipe.Flush();
+            _pipe.FlushAsync();
             
             for (int i = 1024 * 1024 - 1; i >= 0; --i)
             {
@@ -122,7 +122,7 @@ namespace CustomPipelinesTest
         {
             _pipe.GetWriterMemory(0);
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             Assert.AreEqual(10, _pipe.Length);
         }
@@ -130,7 +130,7 @@ namespace CustomPipelinesTest
         public void LengthCorrectAfterAllocAdvanceFlush()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             Assert.AreEqual(10, _pipe.Length);
         }
@@ -139,7 +139,7 @@ namespace CustomPipelinesTest
         {
             _pipe.GetWriterMemory(100);
             _pipe.Advance(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             SequencePosition consumed = _pipe.Buffer.Slice(5).Start;
@@ -151,7 +151,7 @@ namespace CustomPipelinesTest
         public void LengthDoesNotChangeIfExamineDoesNotChange()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.Start);
 
@@ -161,7 +161,7 @@ namespace CustomPipelinesTest
         public void LengthChangesIfExaminedChanges()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
 
@@ -173,7 +173,7 @@ namespace CustomPipelinesTest
             for (int i = 0; i < 5; ++i)
             {
                 _pipe.WriteEmpty(10);
-                _pipe.Flush();
+                _pipe.FlushAsync();
                 _pipe.Read();
                 _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
 
@@ -185,7 +185,7 @@ namespace CustomPipelinesTest
         {
             _pipe.WriteEmpty(MaxBufferSize);
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
 
@@ -196,7 +196,7 @@ namespace CustomPipelinesTest
             Assert.AreEqual(4096, _pipe.Length);
 
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.Start);
@@ -213,7 +213,7 @@ namespace CustomPipelinesTest
         {
             _pipe.WriteEmpty(MaxBufferSize);
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
 
@@ -227,7 +227,7 @@ namespace CustomPipelinesTest
             Assert.AreEqual(4096, _pipe.Length);
 
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.Start);
@@ -246,7 +246,7 @@ namespace CustomPipelinesTest
             _pipe.WriteEmpty(MaxBufferSize);
             _pipe.WriteEmpty(MaxBufferSize);
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
 
@@ -257,7 +257,7 @@ namespace CustomPipelinesTest
             Assert.AreEqual(4096, _pipe.Length);
 
             _pipe.WriteEmpty(MaxBufferSize);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.End);
@@ -268,7 +268,7 @@ namespace CustomPipelinesTest
         public void ExaminedLessThanBeforeThrows()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
@@ -276,7 +276,7 @@ namespace CustomPipelinesTest
             Assert.AreEqual(0, _pipe.Length);
 
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             Assert.ThrowsException<InvalidOperationException>(() =>
@@ -286,7 +286,7 @@ namespace CustomPipelinesTest
         public void ConsumedGreaterThanExaminedThrows()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             Assert.ThrowsException<InvalidOperationException>(() =>
@@ -296,7 +296,7 @@ namespace CustomPipelinesTest
         public void NullConsumedOrExaminedNoops()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(default, _pipe.Buffer.End);
@@ -305,7 +305,7 @@ namespace CustomPipelinesTest
         public void NullExaminedNoops()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.Start, default);
@@ -314,7 +314,7 @@ namespace CustomPipelinesTest
         public void NullExaminedAndConsumedNoops()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(default, default);

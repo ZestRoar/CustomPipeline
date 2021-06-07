@@ -32,9 +32,17 @@ namespace CustomPipelines
         {
             writeState |= FlowState.Cancelled;
         }
+        public void ResumeWrite()
+        {
+            writeState &= ~FlowState.Cancelled;
+        }
         public void CancelRead()
         {
             readState |= FlowState.Cancelled;
+        }
+        public void ResumeRead()
+        {
+            readState &= ~FlowState.Cancelled;
         }
         public bool IsWritingCompleted => (writeState & FlowState.Completed) != 0;
         public bool IsReadingCompleted => (readState & FlowState.Completed) != 0;

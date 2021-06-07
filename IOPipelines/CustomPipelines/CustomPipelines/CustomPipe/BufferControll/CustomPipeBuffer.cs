@@ -67,6 +67,9 @@ namespace CustomPipelines
         public bool CheckWritable(int sizeHint)
             => this.writingHeadMemory.Length >= sizeHint;
 
+        public int CalcBytesShortWrite(int sizeHint)
+            => Math.Max(0,sizeHint - this.writingHeadMemory.Length);
+
         // ======================================================== Callback
 
         public bool CanWrite { get; set; }
@@ -133,12 +136,14 @@ namespace CustomPipelines
 
         // ======================================================== Allocate
 
-        public void AllocateWriteHead(int sizeHint)
+        public int AllocateWriteHead(int sizeHint)  // 부족했던 바이트 반환
         {
             if (this.CheckWritable(sizeHint))
             {
-                return;
+                return 0;
             }
+
+            int bytesShorts = this.CalcBytesShortWrite(sizeHint);
 
             if (this.writingHead == null)
             {
@@ -156,6 +161,8 @@ namespace CustomPipelines
                 this.writingHead!.SetNext(newSegment);
                 this.writingHead = newSegment;
             }
+
+            return bytesShorts;
         }
 
         private CustomBufferSegment AllocateSegment(int sizeHint)
@@ -193,8 +200,7 @@ namespace CustomPipelines
                     break;
                 }
 
-                this.writingHead!.End += writable;
-                this.writingHeadBytesBuffered = 0;
+                CommitWritingHead();
 
                 // 메모리 풀 사용을 위해 할당만 요청
                 var newSegment = AllocateSegment(0);

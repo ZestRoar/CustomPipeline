@@ -16,6 +16,6 @@ namespace CustomPipelines
         public bool TryAdvance(int bytes) => this.writerPipe.TryAdvance(bytes);
         public Signal Advance(int bytes) => this.writerPipe.Advance(bytes);
         public Memory<byte>? GetMemory(int sizeHint = 0) => this.writerPipe.GetWriterMemory(sizeHint);
-        public bool WriteAsync(ReadOnlyMemory<byte> source) => this.writerPipe.Write(source);
+        public bool WriteAsync(ReadOnlyMemory<byte> source) => this.writerPipe.WriteAndCommit(source);
     }
 }

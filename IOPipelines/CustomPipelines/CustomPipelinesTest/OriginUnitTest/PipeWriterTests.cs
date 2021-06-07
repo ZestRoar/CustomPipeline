@@ -20,7 +20,7 @@ namespace CustomPipelinesTest
 
         private byte[] Read()
         {
-            Pipe.Flush();
+            Pipe.FlushAsync();
             Pipe.Read();
             var data = Pipe.Buffer.ToArray();
             Pipe.AdvanceToEnd();
@@ -110,7 +110,7 @@ namespace CustomPipelinesTest
             var span = Pipe.GetWriterMemory(10).Value.Span;
 
             Assert.IsTrue(span.Length >= 10);
-            // 0 byte Flush would not complete the reader so we complete.
+            // 0 byte FlushAsync would not complete the reader so we complete.
             Pipe.CompleteWriter();
             CollectionAssert.AreEqual(new byte[] { }, Read());
         }
@@ -138,7 +138,7 @@ namespace CustomPipelinesTest
         {
             var data = new byte[length];
             new Random(length).NextBytes(data);
-            Pipe.Write(data);
+            Pipe.WriteAndCommit(data);
             Pipe.Read();
             ReadOnlySequence<byte>? input = Pipe.Buffer;
             CollectionAssert.AreEqual(data, Pipe.Buffer.ToArray());
@@ -150,7 +150,7 @@ namespace CustomPipelinesTest
         {
             Pipe.GetWriterMemory(0);
             Pipe.Advance(0); // doing nothing, the hard way
-            Pipe.Flush();
+            Pipe.FlushAsync();
         }
 
         [TestMethod]
@@ -186,7 +186,7 @@ namespace CustomPipelinesTest
                 Pipe.Advance(1);
             }
 
-            Pipe.Flush(); 
+            Pipe.FlushAsync(); 
             Pipe.CompleteWriter();
             Pipe.Read();
             CollectionAssert.AreEqual(bytes, Pipe.Buffer.ToArray());
@@ -207,7 +207,7 @@ namespace CustomPipelinesTest
                 Pipe.Advance(1);
             }
 
-            Pipe.Flush(); 
+            Pipe.FlushAsync(); 
             Pipe.CompleteWriter();
             Pipe.Read();
             CollectionAssert.AreEqual(bytes, Pipe.Buffer.ToArray());
@@ -245,7 +245,7 @@ namespace CustomPipelinesTest
         //    {
         //        var mem = pipe.GetWriterMemory();
         //        pipe.Advance(mem.Value.Length);
-        //        pipe.Flush();
+        //        pipe.FlushAsync();
         //    }
 
         //    Assert.AreEqual(1, pool.CurrentlyRentedBlocks);

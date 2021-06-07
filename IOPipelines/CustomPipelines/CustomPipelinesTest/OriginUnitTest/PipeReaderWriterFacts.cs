@@ -36,7 +36,7 @@ namespace CustomPipelinesTest
         {
             byte[] bytes = Encoding.ASCII.GetBytes("Hello World");
 
-            _pipe.Write(bytes);
+            _pipe.WriteAndCommit(bytes);
             _pipe.Read();
             ReadOnlySequence<byte> buffer = _pipe.Buffer;
 
@@ -54,7 +54,7 @@ namespace CustomPipelinesTest
         {
             _pipe.GetWriterMemory(1);
             _pipe.Advance(100);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             _pipe.AdvanceTo(_pipe.Buffer.End);
@@ -72,7 +72,7 @@ namespace CustomPipelinesTest
             _pipe.Read(1).Then((result) => { RunCheckCallback(); });
             
             _pipe.Write(new byte[1]);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             Assert.IsTrue(CheckCallback);
 
@@ -100,7 +100,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void AdvanceToInvalidCursorThrows()
         {
-            _pipe.Write(new byte[100]);
+            _pipe.WriteAndCommit(new byte[100]);
 
             var buffer = _pipe.Buffer;
             _pipe.AdvanceTo(buffer.End);
@@ -109,7 +109,7 @@ namespace CustomPipelinesTest
 
             // AdvanceToEnd는 자기 버퍼 체크를 한번 하므로 안전
             Assert.ThrowsException<InvalidOperationException>(() => _pipe.AdvanceTo(buffer.End));
-            _pipe.Write(new byte[100]);
+            _pipe.WriteAndCommit(new byte[100]);
             _pipe.AdvanceToEnd();
         }
 
@@ -120,7 +120,7 @@ namespace CustomPipelinesTest
             _pipe.Advance(memory.Length);
             memory = _pipe.GetWriterMemory(1).Value;
             _pipe.Advance(memory.Length);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             memory = _pipe.GetWriterMemory(1).Value;
 
@@ -154,14 +154,14 @@ namespace CustomPipelinesTest
         [TestMethod]
         public void HelloWorldAcrossTwoBlocks()
         {
-            var blockSize = _pipe.GetWriterMemory().Value.Length;
+            var blockSize = _pipe.GetWriterMemory(4096).Value.Length;
 
             byte[] paddingBytes = Enumerable.Repeat((byte) 'a', blockSize - 5).ToArray();
             byte[] bytes = Encoding.ASCII.GetBytes("Hello World");
 
             _pipe.Write(paddingBytes);
             _pipe.Write(bytes);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             _pipe.Read();
             ReadOnlySequence<byte> buffer = _pipe.Buffer;
@@ -206,22 +206,16 @@ namespace CustomPipelinesTest
         public void ReadAsync_ThrowsIfWriterCompletedWithException()
         {
             ThrowTestException(new InvalidOperationException("Writer exception"), e => _pipe.CompleteWriter(e));
-            //ThrowTestException(new InvalidOperationException("Writer exception"), e => originPipe.Writer.Complete(e));
 
             var invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Read());
-            //var invalidOperationException2 = Assert.ThrowsException<InvalidOperationException>(() => originPipe.Reader.ReadAsync());
-
             Assert.AreEqual("Writer exception", invalidOperationException.Message);
             StringAssert.Contains(invalidOperationException.StackTrace, nameof(ThrowTestException));
-            //StringAssert.Contains(invalidOperationException2.StackTrace, nameof(ThrowTestException));
-
 
             invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Read());
             Assert.AreEqual("Writer exception", invalidOperationException.Message);
-            StringAssert.Contains(nameof(ThrowTestException), invalidOperationException.StackTrace);
+            StringAssert.Contains(invalidOperationException.StackTrace, nameof(ThrowTestException));
 
             //Assert.Single(invalidOperationException.StackTrace, "Pipe.GetReadResult"));
-            Assert.IsNotNull(Regex.Matches(invalidOperationException.StackTrace, "Pipe.GetReadResult"));
         }
 
         [TestMethod]
@@ -229,15 +223,13 @@ namespace CustomPipelinesTest
         {
             ThrowTestException(new InvalidOperationException("Reader exception"), e => _pipe.CompleteReader(e));
 
-            InvalidOperationException invalidOperationException =
-                Assert.ThrowsException<InvalidOperationException>(() => _pipe.Write(new byte[1]));
-
+            InvalidOperationException invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Write(new byte[1]));
             Assert.AreEqual("Reader exception", invalidOperationException.Message);
-            StringAssert.Contains(nameof(ThrowTestException), invalidOperationException.StackTrace);
+            StringAssert.Contains(invalidOperationException.StackTrace, nameof(ThrowTestException));
 
             invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Write(new byte[1]));
             Assert.AreEqual("Reader exception", invalidOperationException.Message);
-            StringAssert.Contains(nameof(ThrowTestException), invalidOperationException.StackTrace);
+            StringAssert.Contains(invalidOperationException.StackTrace, nameof(ThrowTestException));
         }
 
         [TestMethod]
@@ -245,6 +237,7 @@ namespace CustomPipelinesTest
         {
             // Write 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
+            _pipe.Flush();
 
             // Write 9
             _pipe.Write(new byte[] { 0, 0, 0, 9 });
@@ -256,7 +249,7 @@ namespace CustomPipelinesTest
             var reader = _pipe.Buffer;
 
             Assert.AreEqual(4, reader.Length);
-            Assert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.ToArray());
 
             // Don't move
             _pipe.AdvanceTo(reader.Start);
@@ -267,9 +260,9 @@ namespace CustomPipelinesTest
             reader = _pipe.Buffer;
 
             Assert.AreEqual(12, reader.Length);
-            Assert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
-            Assert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
-            Assert.AreEqual(new byte[] { 0, 0, 0, 8 }, reader.Slice(8, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 8 }, reader.Slice(8, 4).ToArray());
 
             _pipe.AdvanceTo(reader.Start, reader.Start);
         }
@@ -278,7 +271,7 @@ namespace CustomPipelinesTest
         public async Task ReaderShouldNotGetUnflushedBytesWhenOverflowingSegments()
         {
             // Fill the block with stuff leaving 5 bytes at the end
-            Memory<byte> buffer = _pipe.GetWriterMemory().Value;
+            Memory<byte> buffer = _pipe.GetWriterMemory(4096).Value;
 
             int len = buffer.Length;
             // Fill the buffer with garbage
@@ -300,20 +293,20 @@ namespace CustomPipelinesTest
             // Make sure we don't see it yet
             var reader = _pipe.Buffer;
 
-            Assert.AreEqual(len - 5, reader.Length);
+            Assert.AreEqual(len - 5, _pipe.Length);
 
             // Don't move
-            _pipe.AdvanceTo(reader.End);
+            _pipe.AdvanceToEnd();
 
             // Now flush
             _pipe.Flush();
 
             reader = _pipe.Buffer;
 
-            Assert.AreEqual(12, reader.Length);
-            Assert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
-            Assert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
-            Assert.AreEqual(new byte[] { 0, 0, 0, 8 }, reader.Slice(8, 4).ToArray());
+            Assert.AreEqual(12, _pipe.Length);
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 8 }, reader.Slice(8, 4).ToArray());
 
             _pipe.AdvanceTo(reader.Start, reader.Start);
         }
@@ -323,12 +316,13 @@ namespace CustomPipelinesTest
         {
             // Write 10 and flush
             _pipe.Write(new byte[] { 0, 0, 0, 10 });
+            _pipe.Flush();
 
             // Write Hello to another pipeline and get the buffer
             byte[] bytes = Encoding.ASCII.GetBytes("Hello");
 
             var c2 = new CustomPipe(new CustomPipeOptions());
-            c2.Write(bytes);
+            c2.WriteAndCommit(bytes);
             var c2Buffer = c2.Buffer;
 
             Assert.AreEqual(bytes.Length, c2Buffer.Length);
@@ -349,25 +343,179 @@ namespace CustomPipelinesTest
             var reader = _pipe.Buffer;
 
             Assert.AreEqual(4, reader.Length);
-            Assert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
 
             // Consume nothing
             _pipe.AdvanceTo(reader.Start);
 
-            // Flush the second set of writes
-            _pipe.Flush();
+            // FlushAsync the second set of writes
+            _pipe.FlushAsync();
 
             reader = _pipe.Buffer;
 
             // int, int, "Hello"
             Assert.AreEqual(13, reader.Length);
-            Assert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
-            Assert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
-            Assert.AreEqual("Hello", Encoding.ASCII.GetString(reader.Slice(8).ToArray()));
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 10 }, reader.Slice(0, 4).ToArray());
+            CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
+            StringAssert.Contains("Hello", Encoding.ASCII.GetString(reader.Slice(8).ToArray()));
+            StringAssert.Contains(Encoding.ASCII.GetString(reader.Slice(8).ToArray()), "Hello");
 
             _pipe.AdvanceTo(reader.Start, reader.Start);
         }
 
+       
+        [TestMethod]
+        public void ThrowsOnAllocAfterCompleteWriter()
+        {
+            _pipe.CompleteWriter();
+
+            Assert.ThrowsException<InvalidOperationException>(() => _pipe.GetWriterMemory());
+        }
+
+        [TestMethod]
+        public void ThrowsOnReadAfterCompleteReader()
+        {
+            _pipe.CompleteReader();
+
+            Assert.ThrowsException<InvalidOperationException>(() => _pipe.Read());
+        }
+
+        [TestMethod]
+        public void TryReadAfterCancelPendingReadReturnsTrue()
+        {
+            _pipe.CancelRead();
+
+            bool gotData = _pipe.TryRead(out var result);
+
+            Assert.IsTrue(result.IsCanceled);
+
+            _pipe.AdvanceToEnd();
+        }
+
+        [TestMethod]
+        public void TryReadAfterCloseWriterWithExceptionThrows()
+        {
+            _pipe.CompleteWriter(new Exception("wow"));
+
+            var ex = Assert.ThrowsException<Exception>(() => _pipe.TryRead(out var result));
+            StringAssert.Contains("wow", ex.Message);
+            StringAssert.Contains(ex.Message, "wow");
+        }
+
+        [TestMethod]
+        public void TryReadAfterReaderCompleteThrows()
+        {
+            _pipe.CompleteReader();
+
+            Assert.ThrowsException<InvalidOperationException>(() => _pipe.TryRead(out var result));
+        }
+
+        [TestMethod]
+        public void TryReadAfterWriterCompleteReturnsTrue()
+        {
+            _pipe.CompleteWriter();
+
+            bool gotData = _pipe.TryRead(out var result);
+
+            Assert.IsTrue(result.IsCompleted);
+
+            _pipe.AdvanceToEnd();
+        }
+
+        [TestMethod]
+        public void WhenTryReadReturnsFalseDontNeedToCallAdvance()
+        {
+            bool gotData = _pipe.TryRead(out var result, 1);
+            Assert.IsFalse(gotData);
+            _pipe.AdvanceTo(default);
+        }
+
+        [TestMethod]
+        public void WritingDataMakesDataReadableViaPipeline()
+        {
+            byte[] bytes = Encoding.ASCII.GetBytes("Hello World");
+
+            _pipe.WriteAndCommit(bytes);
+            var buffer = _pipe.Buffer;
+
+            Assert.AreEqual(11, buffer.Length);
+            Assert.IsTrue(buffer.IsSingleSegment);
+            var array = new byte[11];
+            buffer.First.Span.CopyTo(array);
+            Assert.AreEqual("Hello World", Encoding.ASCII.GetString(array));
+
+            _pipe.AdvanceTo(buffer.Start, buffer.Start);
+        }
+
+        [TestMethod]
+        public void CompleteAfterAdvanceCommits()
+        {
+            _pipe.WriteEmpty(4);
+
+            _pipe.CompleteWriter();
+
+            Assert.AreEqual(4, _pipe.Buffer.Length);
+            _pipe.AdvanceToEnd();
+        }
+
+        [TestMethod]
+        public void AdvanceWithoutReadThrows()      // 커스텀 버전은 읽지 않고 버퍼를 스킵할 수 있음
+        {
+            _pipe.Write(new byte[3]);
+            var buffer = _pipe.Buffer;
+            _pipe.AdvanceTo(buffer.Start);
+
+            //InvalidOperationException exception = Assert.ThrowsException<InvalidOperationException>(() => _pipe.AdvanceTo(buffer.End));
+            //Assert.AreEqual("No reading operation to complete.", exception.Message);
+        }
+
+        [TestMethod]
+        public void GetMemoryZeroReturnsNonEmpty()  // 0은 이제 받지 않고 1을 치거나 해야 함 (디폴트 : 1)
+        {
+            Assert.IsTrue(_pipe.GetWriterMemory().Value.Length > 0);
+            Assert.IsTrue(_pipe.GetWriterMemory(1).Value.Length > 0);
+        }
+
+       
+        [TestMethod]
+        public async Task ReadAsyncReturnsDataAfterCanceledRead()
+        {
+            var pipe = new CustomPipe();
+
+            pipe.CancelRead();
+            pipe.TryRead(out var readResult);
+            Assert.IsTrue(readResult.IsCanceled);
+
+            pipe.WriteAndCommit(new byte[] { 1, 2, 3 });
+            pipe.TryRead(out var result);
+
+            Assert.IsFalse(result.IsCanceled);
+            Assert.IsFalse(result.IsCompleted);
+            Assert.AreEqual(3, result.Buffer.Value.Length);
+
+            pipe.Reader.AdvanceTo(readResult.Buffer.Value.End);
+        }
+
+        private bool IsTaskWithResult<T>(ValueTask<T> task)
+        {
+            return task == new ValueTask<T>(task.Result);
+        }
+
+        private sealed class CustomSynchronizationContext : SynchronizationContext
+        {
+            public List<Tuple<SendOrPostCallback, object>> Callbacks = new List<Tuple<SendOrPostCallback, object>>();
+
+            public override void Post(SendOrPostCallback d, object state)
+            {
+                Callbacks.Add(Tuple.Create(d, state));
+            }
+        }
+
+
+        //=============================================================================================================================
+        //====================================================== 비동기 제작 중 ========================================================
+        //=============================================================================================================================
+        /*
         [TestMethod]
         [DataRow(true)]
         [DataRow(false)]
@@ -389,7 +537,7 @@ namespace CustomPipelinesTest
                 var tcs = new TaskCompletionSource<int>();
                 val.Value = 10;
 
-               
+
                 pipe.Read().Then((result) =>
                 {
                     tcs.TrySetResult(val.Value);
@@ -427,7 +575,7 @@ namespace CustomPipelinesTest
         [DataRow(false)]
         public async Task FlushAsyncOnCompletedCapturesTheExecutionContextAndSyncContext(bool useSynchronizationContext)
         {
-            var pipe = new TestCustomPipe(new CustomPipeOptions( pauseWriterThreshold: 20, resumeWriterThreshold: 10));
+            var pipe = new TestCustomPipe(new CustomPipeOptions(pauseWriterThreshold: 20, resumeWriterThreshold: 10));
 
             SynchronizationContext previous = SynchronizationContext.Current;
             var sc = new CustomSynchronizationContext();
@@ -476,7 +624,7 @@ namespace CustomPipelinesTest
             }
         }
 
-        [TestMethod]
+         [TestMethod]
         public async Task ReadingCanBeCanceled()
         {
             var cts = new CancellationTokenSource();
@@ -493,7 +641,7 @@ namespace CustomPipelinesTest
                 async () =>
                 {
                     //ReadResult result = await _pipe.Reader.ReadAsync();
-                    var buffer = _pipe.Buffer;
+                    _pipe.Read();
                 });
         }
 
@@ -517,88 +665,6 @@ namespace CustomPipelinesTest
             Assert.AreEqual("World", Encoding.ASCII.GetString(buffer.ToArray()));
 
             _pipe.AdvanceTo(buffer.End);
-        }
-
-        [TestMethod]
-        public void ThrowsOnAllocAfterCompleteWriter()
-        {
-            _pipe.CompleteWriter();
-
-            Assert.ThrowsException<InvalidOperationException>(() => _pipe.GetWriterMemory());
-        }
-
-        [TestMethod]
-        public void ThrowsOnReadAfterCompleteReader()
-        {
-            _pipe.CompleteReader();
-
-            Assert.ThrowsException<InvalidOperationException>(() => _pipe.Read());
-        }
-
-        [TestMethod]
-        public void TryReadAfterCancelPendingReadReturnsTrue()
-        {
-            _pipe.CancelRead();
-
-            bool gotData = _pipe.TryRead(out var result);
-
-            Assert.IsTrue(result.IsCanceled);
-
-            _pipe.AdvanceToEnd();
-        }
-
-        [TestMethod]
-        public void TryReadAfterCloseWriterWithExceptionThrows()
-        {
-            _pipe.CompleteWriter(new Exception("wow"));
-
-            var ex = Assert.ThrowsException<Exception>(() => _pipe.TryRead(out var result));
-            Assert.AreEqual("wow", ex.Message);
-        }
-
-        [TestMethod]
-        public void TryReadAfterReaderCompleteThrows()
-        {
-            _pipe.CompleteReader();
-
-            Assert.ThrowsException<InvalidOperationException>(() => _pipe.TryRead(out var result));
-        }
-
-        [TestMethod]
-        public void TryReadAfterWriterCompleteReturnsTrue()
-        {
-            _pipe.CompleteWriter();
-
-            bool gotData = _pipe.TryRead(out var result);
-
-            Assert.IsTrue(result.IsCompleted);
-
-            _pipe.AdvanceToEnd();
-        }
-
-        [TestMethod]
-        public void WhenTryReadReturnsFalseDontNeedToCallAdvance()
-        {
-            bool gotData = _pipe.TryRead(out var result);
-            Assert.IsFalse(gotData);
-            _pipe.AdvanceTo(default);
-        }
-
-        [TestMethod]
-        public void WritingDataMakesDataReadableViaPipeline()
-        {
-            byte[] bytes = Encoding.ASCII.GetBytes("Hello World");
-
-            _pipe.Write(bytes);
-            var buffer = _pipe.Buffer;
-
-            Assert.AreEqual(11, buffer.Length);
-            Assert.IsTrue(buffer.IsSingleSegment);
-            var array = new byte[11];
-            buffer.First.Span.CopyTo(array);
-            Assert.AreEqual("Hello World", Encoding.ASCII.GetString(array));
-
-            _pipe.AdvanceTo(buffer.Start, buffer.Start);
         }
 
         [TestMethod]
@@ -626,28 +692,6 @@ namespace CustomPipelinesTest
         }
 
         [TestMethod]
-        public void CompleteAfterAdvanceCommits()
-        {
-            _pipe.WriteEmpty(4);
-
-            _pipe.CompleteWriter();
-
-            Assert.AreEqual(4, _pipe.Buffer.Length);
-            _pipe.AdvanceToEnd();
-        }
-
-        [TestMethod]
-        public void AdvanceWithoutReadThrows()
-        {
-            _pipe.Write(new byte[3]);
-            var buffer = _pipe.Buffer;
-            _pipe.AdvanceTo(buffer.Start);
-
-            InvalidOperationException exception = Assert.ThrowsException<InvalidOperationException>(() => _pipe.AdvanceTo(buffer.End));
-            Assert.AreEqual("No reading operation to complete.", exception.Message);
-        }
-
-        [TestMethod]
         public async Task TryReadAfterReadAsyncThrows()
         {
             _pipe.Write(new byte[3]);
@@ -656,19 +700,14 @@ namespace CustomPipelinesTest
             _pipe.AdvanceTo(buffer.Start);
         }
 
-        [TestMethod]
-        public void GetMemoryZeroReturnsNonEmpty()
-        {
-            Assert.IsTrue(_pipe.GetWriterMemory(0).Value.Length > 0);
-        }
-
+        
         [TestMethod]
         public async Task ReadAsyncWithDataReadyReturnsTaskWithValue()
         {
             _pipe.WriteEmpty(10);
-            _pipe.Flush();
+            _pipe.FlushAsync();
             _pipe.TryRead(out var result);
-            //Assert.IsTrue(IsTaskWithResult(result));
+            Assert.IsNotNull(result);
         }
 
         [TestMethod]
@@ -676,7 +715,7 @@ namespace CustomPipelinesTest
         {
             _pipe.CancelRead();
             _pipe.TryRead(out var result);
-            //Assert.IsTrue(IsTaskWithResult(task));
+            Assert.IsNotNull(result);
         }
 
         [TestMethod]
@@ -695,11 +734,11 @@ namespace CustomPipelinesTest
             //Assert.IsTrue(IsTaskWithResult(task));
         }
 
-        [TestMethod]
+         [TestMethod]
         public void EmptyFlushAsyncDoesntWakeUpReader()
         {
             _pipe.TryRead(out var result);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             Assert.IsFalse(result.IsCompleted);
         }
@@ -713,45 +752,14 @@ namespace CustomPipelinesTest
             _pipe.AdvanceTo(buffer.Start, buffer.End);
 
             _pipe.TryRead(out var result);
-            _pipe.Flush();
+            _pipe.FlushAsync();
 
             Assert.IsFalse(result.IsCompleted);
         }
 
-        [TestMethod]
-        public async Task ReadAsyncReturnsDataAfterCanceledRead()
-        {
-            var pipe = new Pipe();
 
-            ValueTask<ReadResult> readTask = pipe.Reader.ReadAsync();
-            pipe.Reader.CancelPendingRead();
-            ReadResult readResult = await readTask;
-            Assert.IsTrue(readResult.IsCanceled);
 
-            readTask = pipe.Reader.ReadAsync();
-            await pipe.Writer.WriteAsync(new byte[] { 1, 2, 3 });
-            readResult = await readTask;
-
-            Assert.IsFalse(readResult.IsCanceled);
-            Assert.IsFalse(readResult.IsCompleted);
-            Assert.AreEqual(3, readResult.Buffer.Length);
-
-            pipe.Reader.AdvanceTo(readResult.Buffer.End);
-        }
-
-        private bool IsTaskWithResult<T>(ValueTask<T> task)
-        {
-            return task == new ValueTask<T>(task.Result);
-        }
-
-        private sealed class CustomSynchronizationContext : SynchronizationContext
-        {
-            public List<Tuple<SendOrPostCallback, object>> Callbacks = new List<Tuple<SendOrPostCallback, object>>();
-
-            public override void Post(SendOrPostCallback d, object state)
-            {
-                Callbacks.Add(Tuple.Create(d, state));
-            }
-        }
+        //*/
     }
 }
+

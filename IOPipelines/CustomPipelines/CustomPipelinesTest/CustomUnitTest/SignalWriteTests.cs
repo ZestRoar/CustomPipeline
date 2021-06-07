@@ -106,10 +106,16 @@ namespace CustomPipelinesTest
             {
                 throw new InvalidOperationException();
             }
+            
+            //this.receiveArgs.SetBuffer(memory.Value);
+            //this.socket.ReceiveAsync(this.receiveArgs);
+            //var received = this.receiveArgs.Count;
 
-            this.receiveArgs.SetBuffer(memory.Value);
-            this.socket.ReceiveAsync(this.receiveArgs);
-            var received = this.receiveArgs.Count;
+            var received = 5;
+            byte[] arrBytes = new byte[received];
+            ReadOnlyMemory<byte> source = new ReadOnlyMemory<byte>(arrBytes);
+            source.CopyTo(memory.Value);
+
             // 대충 소켓으로부터 받는 코드
             var signal = this.pipeline.Writer.Advance(received);
             signal.OnCompleted(() =>
@@ -130,9 +136,15 @@ namespace CustomPipelinesTest
             {
                 throw new InvalidOperationException();
             }
-            this.receiveArgs.SetBuffer(memory.Value);
-            this.socket.ReceiveAsync(this.receiveArgs);
-            var received = this.receiveArgs.Count;
+            //this.receiveArgs.SetBuffer(memory.Value);
+            //this.socket.ReceiveAsync(this.receiveArgs);
+            //var received = this.receiveArgs.Count;
+
+            var received = 5;
+            byte[] arrBytes = new byte[received];
+            ReadOnlyMemory<byte> source = new ReadOnlyMemory<byte>(arrBytes);
+            source.CopyTo(memory.Value);
+
             // 대충 소켓으로부터 받는 코드
             if (this.pipeline.TryAdvance(received) == false)
             {

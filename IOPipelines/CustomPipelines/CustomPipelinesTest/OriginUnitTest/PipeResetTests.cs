@@ -26,7 +26,7 @@ namespace CustomPipelinesTest
         {
             var source = new byte[] { 1, 2, 3 };
 
-            _pipe.Write(source);
+            _pipe.WriteAndCommit(source);
             _pipe.Read();
             CollectionAssert.AreEqual(source, _pipe.Buffer.ToArray());
             _pipe.AdvanceToEnd();
@@ -36,7 +36,7 @@ namespace CustomPipelinesTest
 
             _pipe.Reset();
 
-            _pipe.Write(source);
+            _pipe.WriteAndCommit(source);
             _pipe.Read();
 
             CollectionAssert.AreEqual(source, _pipe.Buffer.ToArray());
@@ -65,7 +65,7 @@ namespace CustomPipelinesTest
 
             _pipe.Reset();
 
-            Assert.IsFalse(_pipe.TryRead(out ReadResult result));
+            Assert.IsFalse(_pipe.TryRead(out ReadResult result,1));
         }
     }
 }
