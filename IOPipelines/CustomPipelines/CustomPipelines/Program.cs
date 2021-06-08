@@ -104,7 +104,7 @@ namespace CustomPipelines
 
                 //Assert.AreEqual(i + 1, _pipe.Buffer.Length);
 
-                _pipe.AdvanceTo(consumed, consumed);
+                _pipe.AdvanceTo(consumed);
 
                 //Assert.AreEqual(i, _pipe.Length);
             }

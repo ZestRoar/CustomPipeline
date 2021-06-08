@@ -110,7 +110,7 @@ namespace CustomPipelinesTest
 
                 //Assert.AreEqual(i + 1, _pipe.Buffer.Length);
 
-                _pipe.AdvanceTo(consumed, consumed);
+                _pipe.AdvanceTo(consumed);
 
                 //Assert.AreEqual(i, _pipe.Length);
             }
@@ -143,7 +143,7 @@ namespace CustomPipelinesTest
 
             _pipe.Read();
             SequencePosition consumed = _pipe.Buffer.Slice(5).Start;
-            _pipe.AdvanceTo(consumed, consumed);
+            _pipe.AdvanceTo(consumed);
 
             Assert.AreEqual(5, _pipe.Length);
         }
@@ -163,7 +163,7 @@ namespace CustomPipelinesTest
             _pipe.WriteEmpty(10);
             _pipe.FlushAsync();
             _pipe.Read();
-            _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
+            _pipe.AdvanceTo(_pipe.Buffer.Start);
 
             Assert.AreEqual(0, _pipe.Length);
         }
@@ -175,7 +175,7 @@ namespace CustomPipelinesTest
                 _pipe.WriteEmpty(10);
                 _pipe.FlushAsync();
                 _pipe.Read();
-                _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
+                _pipe.AdvanceTo(_pipe.Buffer.Start);
 
                 Assert.AreEqual(0, _pipe.Length);
             }
@@ -222,7 +222,8 @@ namespace CustomPipelinesTest
 
             Assert.AreNotSame(endOfFirstBlock.GetObject(), startOfSecondBlock.GetObject());
 
-            _pipe.AdvanceTo(startOfSecondBlock, endOfFirstBlock);
+            //_pipe.AdvanceTo(startOfSecondBlock, endOfFirstBlock);
+            _pipe.AdvanceTo(startOfSecondBlock);
 
             Assert.AreEqual(4096, _pipe.Length);
 
@@ -252,7 +253,8 @@ namespace CustomPipelinesTest
 
             SequencePosition position = _pipe.Buffer.Slice(_pipe.Buffer.Start, MaxBufferSize).End;
 
-            _pipe.AdvanceTo(position, _pipe.Buffer.GetPosition(MaxBufferSize*2));
+            //_pipe.AdvanceTo(position, _pipe.Buffer.GetPosition(MaxBufferSize*2));
+            _pipe.AdvanceTo(position);
 
             Assert.AreEqual(4096, _pipe.Length);
 
@@ -271,7 +273,8 @@ namespace CustomPipelinesTest
             _pipe.FlushAsync();
 
             _pipe.Read();
-            _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
+            //_pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.End);
+            _pipe.AdvanceTo(_pipe.Buffer.Start);
 
             Assert.AreEqual(0, _pipe.Length);
 
@@ -280,18 +283,9 @@ namespace CustomPipelinesTest
 
             _pipe.Read();
             Assert.ThrowsException<InvalidOperationException>(() =>
-                _pipe.AdvanceTo(_pipe.Buffer.Start, _pipe.Buffer.Start));
+                _pipe.AdvanceTo(_pipe.Buffer.Start));
         }
-        [TestMethod]
-        public void ConsumedGreaterThanExaminedThrows()
-        {
-            _pipe.WriteEmpty(10);
-            _pipe.FlushAsync();
-
-            _pipe.Read();
-            Assert.ThrowsException<InvalidOperationException>(() =>
-                _pipe.AdvanceTo(_pipe.Buffer.End, _pipe.Buffer.Start));
-        }
+        
         [TestMethod]
         public void NullConsumedOrExaminedNoops()
         {
@@ -299,7 +293,7 @@ namespace CustomPipelinesTest
             _pipe.FlushAsync();
 
             _pipe.Read();
-            _pipe.AdvanceTo(default, _pipe.Buffer.End);
+            _pipe.AdvanceTo(default);
         }
         [TestMethod]
         public void NullExaminedNoops()
@@ -308,7 +302,7 @@ namespace CustomPipelinesTest
             _pipe.FlushAsync();
 
             _pipe.Read();
-            _pipe.AdvanceTo(_pipe.Buffer.Start, default);
+            _pipe.AdvanceTo(_pipe.Buffer.Start);
         }
         [TestMethod]
         public void NullExaminedAndConsumedNoops()
@@ -317,7 +311,7 @@ namespace CustomPipelinesTest
             _pipe.FlushAsync();
 
             _pipe.Read();
-            _pipe.AdvanceTo(default, default);
+            _pipe.AdvanceTo(default);
         }
 
     }

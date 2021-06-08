@@ -203,27 +203,19 @@ namespace CustomPipelines
         public void AdvanceToEnd()
         {
             var endPosition = this.customBuffer.ReadBuffer.End;
-            this.AdvanceTo(endPosition, endPosition);
+            this.AdvanceTo(endPosition);
         }
 
         public void AdvanceTo(SequencePosition endPosition)
-        {
-            this.AdvanceTo(endPosition, endPosition);
-        }
-
-        public void AdvanceTo(SequencePosition startPosition, SequencePosition endPosition)
         {
             if (this.pipeState.IsReadingCompleted)
             {
                 throw new InvalidOperationException
                     ("Reading is not allowed after reader was completed.");
             }
-
-            this.customBuffer.AdvanceTo(ref startPosition, ref endPosition);
-            
+            this.customBuffer.AdvanceTo(ref endPosition);
         }
 
-  
         // =================================================================== Complete 
 
         public void Reset()

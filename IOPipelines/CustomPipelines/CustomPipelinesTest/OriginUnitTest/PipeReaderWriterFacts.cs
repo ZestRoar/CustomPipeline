@@ -175,7 +175,7 @@ namespace CustomPipelinesTest
             }
 
             List<ReadOnlyMemory<byte>> spans = memory;
-            _pipe.AdvanceTo(buffer.Start, buffer.Start);
+            _pipe.AdvanceTo(buffer.Start);
 
             Assert.AreEqual(2, memory.Count);
             var helloBytes = new byte[spans[0].Length];
@@ -264,7 +264,7 @@ namespace CustomPipelinesTest
             CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
             CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 8 }, reader.Slice(8, 4).ToArray());
 
-            _pipe.AdvanceTo(reader.Start, reader.Start);
+            _pipe.AdvanceTo(reader.Start);
         }
 
         [TestMethod]
@@ -308,7 +308,7 @@ namespace CustomPipelinesTest
             CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 9 }, reader.Slice(4, 4).ToArray());
             CollectionAssert.AreEqual(new byte[] { 0, 0, 0, 8 }, reader.Slice(8, 4).ToArray());
 
-            _pipe.AdvanceTo(reader.Start, reader.Start);
+            _pipe.AdvanceTo(reader.Start);
         }
 
         [TestMethod]
@@ -360,7 +360,7 @@ namespace CustomPipelinesTest
             StringAssert.Contains("Hello", Encoding.ASCII.GetString(reader.Slice(8).ToArray()));
             StringAssert.Contains(Encoding.ASCII.GetString(reader.Slice(8).ToArray()), "Hello");
 
-            _pipe.AdvanceTo(reader.Start, reader.Start);
+            _pipe.AdvanceTo(reader.Start);
         }
 
        
@@ -444,7 +444,7 @@ namespace CustomPipelinesTest
             buffer.First.Span.CopyTo(array);
             Assert.AreEqual("Hello World", Encoding.ASCII.GetString(array));
 
-            _pipe.AdvanceTo(buffer.Start, buffer.Start);
+            _pipe.AdvanceTo(buffer.Start);
         }
 
         [TestMethod]

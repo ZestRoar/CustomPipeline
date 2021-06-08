@@ -215,24 +215,13 @@ namespace CustomPipelines
 
         // ======================================================== AdvanceTo
 
-        public void AdvanceTo(ref SequencePosition startPosition, ref SequencePosition endPosition)
+        public void AdvanceTo(ref SequencePosition consumePosition)
         {
-            var consumedSegment = (CustomBufferSegment?)startPosition.GetObject();
-            var consumedIndex = startPosition.GetInteger();
-            var examinedSegment = (CustomBufferSegment?)endPosition.GetObject();
-            var examinedIndex = endPosition.GetInteger();
-
-            // Throw if examined < consumed
-            if (consumedSegment != null && examinedSegment != null &&
-                CustomBufferSegment.IsInvalidLength(
-                consumedSegment, consumedIndex,
-                    examinedSegment, examinedIndex))
-            {
-                throw new InvalidOperationException();
-            }
+            var consumedSegment = (CustomBufferSegment?)consumePosition.GetObject();
+            var consumedIndex = consumePosition.GetInteger();
 
             // 메모리 시퀀스 갱신
-            UpdateBuffer(ref examinedSegment, ref examinedIndex);
+            UpdateBuffer(ref consumedSegment, ref consumedIndex);
 
             // 소비된 메모리 해제
             UnlinkUsedMemory(ref consumedSegment, ref consumedIndex);
