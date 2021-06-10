@@ -27,14 +27,14 @@ namespace CustomPipelinesTest.UnitTest
 
             TestCustomPipe pipe = new TestCustomPipe(new CustomPipeOptions());
             
-            if (pipe.Reader.TryRead(out var result, 5))
+            if (pipe.TryRead(out var result, 5))
             {
                  ReadCallback();
             }
             else
             {
                 var buffer = result.Buffer.Value;
-                pipe.Reader.Read(5)
+                pipe.Read(5)
                     .Then((readResult) =>
                     {
                         ReadCallback();
@@ -58,14 +58,14 @@ namespace CustomPipelinesTest.UnitTest
             this.pipeline.GetWriterMemory(5);
             this.pipeline.TryAdvance(5);
 
-            if (this.pipeline.Reader.TryRead(out var result, 5))
+            if (this.pipeline.TryRead(out var result, 5))
             {
                 this.SendToSocket(result.Buffer.Value);
             }
             else
             {
                 var buffer = result.Buffer.Value;
-                this.pipeline.Reader.Read(5)
+                this.pipeline.Read(5)
                     .Then((result) => { this.SendToSocket(buffer); });
             }
 
@@ -75,7 +75,7 @@ namespace CustomPipelinesTest.UnitTest
         //스트림 내용 그대로 소켓에 Send 하는 작업
         public void SendToSocket(ReadOnlySequence<byte> buffer)
         {
-            this.pipeline.Reader.AdvanceTo(buffer.End);
+            this.pipeline.AdvanceTo(buffer.End);
             this.ProcessSend();
         }
 

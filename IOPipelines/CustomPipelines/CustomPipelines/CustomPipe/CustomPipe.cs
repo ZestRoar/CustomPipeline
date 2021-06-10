@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
+using System.Threading;
 using Mad.Core.Concurrent.Synchronization;
 
 [assembly: InternalsVisibleTo("CustomPipelinesTest")]
@@ -12,6 +13,9 @@ namespace CustomPipelines
     {
 #nullable enable
         internal const int MaxSegmentPoolSize = 256;
+
+        // 동기화 요소
+        private readonly object syncObject = new object();
 
         // 파이프 운용
         private readonly CustomPipeBuffer customBuffer;
@@ -220,16 +224,21 @@ namespace CustomPipelines
 
         public void Reset()
         {
-            if (!disposed)
+            lock (syncObject)
             {
-                throw new InvalidOperationException();
+                if (!disposed)
+                {
+                    throw new InvalidOperationException();
+                }
+
+                this.CompletePipe();
+                this.ResetState();
             }
-            this.CompletePipe();
-            this.ResetState();
         }
 
         public void CompleteReader(Exception exception = null)
         {
+
             this.pipeState.CompleteRead();
 
             if (exception != null)
@@ -237,11 +246,14 @@ namespace CustomPipelines
                 completeException = ExceptionDispatchInfo.Capture(exception);
             }
 
+
             // 쓰기 중인 버퍼가 있으면 취소 처리하고 정리해야함
             if (this.pipeState.IsWritingCompleted)
             {
                 this.CompletePipe();
             }
+
+
         }
 
         public void CompleteWriter(Exception exception = null)
@@ -255,7 +267,7 @@ namespace CustomPipelines
             }
 
             // 읽기 중인 버퍼가 있으면 콜백 처리하고 정리해야함
-            if (this.pipeState.IsReadingCompleted)     
+            if (this.pipeState.IsReadingCompleted)
             {
                 this.CompletePipe();
             }
@@ -263,12 +275,16 @@ namespace CustomPipelines
 
         private void CompletePipe()
         {
-            if (this.disposed)
+            lock (syncObject)
             {
-                return;
+                if (this.disposed)
+                {
+                    return;
+                }
+
+                this.disposed=true;
             }
 
-            this.disposed = true;
             this.customBuffer.Complete();
         }
 

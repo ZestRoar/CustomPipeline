@@ -22,22 +22,22 @@ namespace CustomPipelinesTest
             }
 
             CustomPipe pipe = new CustomPipe(new CustomPipeOptions(128, 64));
-            pipe.Writer.GetMemory(127);
+            pipe.GetWriterMemory(127);
 
             isSignalSet = false;
             
-            var signal = pipe.Writer.Advance(127);
+            var signal = pipe.Advance(127);
             signal.OnCompleted(SignalCallback);
 
             Assert.IsTrue(isSignalSet);
             
             pipe.AdvanceToEnd();
 
-            pipe.Writer.GetMemory(128);
+            pipe.GetWriterMemory(128);
 
             isSignalSet = false;
 
-            signal = pipe.Writer.Advance(128);      // threshold 대비 대용량 주의! 
+            signal = pipe.Advance(128);      // threshold 대비 대용량 주의! 
             signal.OnCompleted(SignalCallback);          // 실제로 이렇게 쓰면 127개 다 사라지고 1개만 쓰거나 127개 기록해두고 1개 나중에 붙여서 써야함
 
             Assert.IsFalse(isSignalSet);
@@ -57,7 +57,7 @@ namespace CustomPipelinesTest
             }
 
             CustomPipe pipe = new CustomPipe(new CustomPipeOptions(128, 64));
-            pipe.Writer.GetMemory(127);
+            pipe.GetWriterMemory(127);
 
             isSignalSet = false;
 
@@ -75,7 +75,7 @@ namespace CustomPipelinesTest
 
             pipe.AdvanceToEnd();
 
-            pipe.Writer.GetMemory(128);
+            pipe.GetWriterMemory(128);
 
             isSignalSet = false;
 
@@ -101,7 +101,7 @@ namespace CustomPipelinesTest
             if (--count < 0)
                 return;
 
-            var memory = this.pipeline.Writer.GetMemory(1);
+            var memory = this.pipeline.GetWriterMemory(1);
             if (memory == null)
             {
                 throw new InvalidOperationException();
@@ -117,7 +117,7 @@ namespace CustomPipelinesTest
             source.CopyTo(memory.Value);
 
             // 대충 소켓으로부터 받는 코드
-            var signal = this.pipeline.Writer.Advance(received);
+            var signal = this.pipeline.Advance(received);
             signal.OnCompleted(() =>
             {
                 this.ProcessReceive();
@@ -131,7 +131,7 @@ namespace CustomPipelinesTest
             if (--count < 0)
                 return;
 
-            var memory = this.pipeline.Writer.GetMemory(1);
+            var memory = this.pipeline.GetWriterMemory(1);
             if (memory == null)
             {
                 throw new InvalidOperationException();
