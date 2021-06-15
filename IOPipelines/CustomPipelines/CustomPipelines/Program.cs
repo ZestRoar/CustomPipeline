@@ -112,6 +112,12 @@ namespace CustomPipelines
         }
         static void Main(string[] args)
         {
+            CoupleTest test = new();
+
+            test.CoupleThreadTest();
+
+            return;
+
             Program prog = new Program();
 
 

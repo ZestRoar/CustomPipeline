@@ -10,6 +10,12 @@ namespace CustomPipelines
     internal class CustomPipeBuffer
     {
 #nullable enable
+
+        // 동기화 오브젝트
+        private readonly object syncPushPop = new object();
+        private readonly object syncReadTail = new object();
+
+
         // 세그먼트 풀 & 옵션
         private CustomBufferSegmentStack customBufferSegmentPool;
         private readonly CustomPipeOptions options;
@@ -63,7 +69,7 @@ namespace CustomPipelines
 
         public long UnconsumedBytes  => this.unconsumedBytes;
         public bool CheckReadable() 
-            => this.unconsumedBytes >= this.readTargetBytes;
+            => (this.unconsumedBytes >= this.readTargetBytes);
         public bool CheckWritingOutOfRange(int bytes) 
             => (uint)bytes > (uint)this.writingHeadMemory.Length;
         public bool CheckAnyUncommittedBytes() 
@@ -83,6 +89,9 @@ namespace CustomPipelines
         {
             this.ReadPromise.SetResult(result);
             this.CanRead = true;
+            this.ReadPromise = new Future<ReadResult>();
+            Console.WriteLine($"버퍼 : {this.ReadBuffer.Length.ToString()} " +
+                              $"( this.unconsumedBytes({this.unconsumedBytes.ToString()}) >= this.readTargetBytes({this.readTargetBytes.ToString()}) : {this.CheckReadable().ToString()})");
         }
         public void RegisterTarget(int targetBytes)
         {
@@ -118,15 +127,17 @@ namespace CustomPipelines
 
             // Advance로 인한 구간 증가 적용
             this.CommitWritingHead();
-
-            // Flush로 인한 read 구간 증가 적용 
-            this.readTail = this.writingHead;
-            this.readTailIdx = this.writingHead.End;
+            
+            lock (syncReadTail)
+            {
+                // Flush로 인한 read 구간 증가 적용 
+                this.readTail = this.writingHead;
+                this.readTailIdx = this.writingHead.End;
+            }
 
             var oldLength = Interlocked.Exchange(ref this.unconsumedBytes, this.unconsumedBytes+this.uncommittedBytes);
             this.uncommittedBytes = 0;
-
-
+            
             if (!this.CanWrite)
             {
                 return this.CanWrite;
@@ -143,6 +154,7 @@ namespace CustomPipelines
 
             return this.CanWrite;
         }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CommitWritingHead()
@@ -183,7 +195,11 @@ namespace CustomPipelines
 
         private CustomBufferSegment AllocateSegment(int sizeHint)
         {
-            CustomBufferSegment newSegment = this.customBufferSegmentPool.TryPop();
+            CustomBufferSegment newSegment;
+            lock (syncPushPop)
+            {
+                newSegment = this.customBufferSegmentPool.TryPop();
+            }
 
             int sizeToRequest = Math.Max(this.options.MinimumSegmentSize, sizeHint);
 
@@ -276,14 +292,21 @@ namespace CustomPipelines
 
             Debug.Assert(this.unconsumedBytes >= 0, "GetUnconsumedBytes has gone negative");
 
+            this.ValidateWriteIfAwait(oldLength);
+
+            return;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ValidateWriteIfAwait(long oldLength)
+        {
             if ((this.CanWrite == false) && this.options.CheckResumeWriter(oldLength, this.unconsumedBytes))
             {
                 this.CanWrite = true;
                 this.WriteSignal.Set();
             }
-
-            return;
         }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void UnlinkUsedMemory(ref CustomBufferSegment? consumedSegment, ref int consumedIndex)
@@ -309,12 +332,13 @@ namespace CustomPipelines
                 // Advance가 끝났고, 펜딩된 쓰기 작업이 없으면 블록 전체 해제
                 else if (this.advanceAwait == false && this.writingHeadBytesBuffered == 0)
                 {
+
                     // 블록이 해제될 것이므로 메모리 끊어놓기
                     this.writingHead = null;
                     this.writingHeadMemory = default;
                     this.lastExaminedIndex = 0;
 
-                    MoveReturnEndToNextBlock(ref returnEnd);    // 모두 null로
+                    MoveReturnEndToNextBlock(ref returnEnd); // 모두 null로
 
                     // 이 상태에서 정상 종료가 가능
                 }
@@ -349,7 +373,10 @@ namespace CustomPipelines
                 Debug.Assert(returnStart != this.writingHead,
                     "Returning _writingHead segment that's in use!");
 
-                this.customBufferSegmentPool.Push(returnStart);
+                lock (syncPushPop)
+                {
+                    this.customBufferSegmentPool.Push(returnStart);
+                }
 
                 returnStart = next;
             }
@@ -358,10 +385,13 @@ namespace CustomPipelines
         private void MoveReturnEndToNextBlock(ref CustomBufferSegment? returnEnd)
         {
             var nextBlock = returnEnd!.NextSegment;
-            if (this.readTail == returnEnd)
+            lock (syncReadTail)
             {
-                this.readTail = nextBlock;
-                this.readTailIdx = 0;
+                if (this.readTail == returnEnd)
+                {
+                    this.readTail = nextBlock;
+                    this.readTailIdx = 0;
+                }
             }
 
             this.readHead = nextBlock;

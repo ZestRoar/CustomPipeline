@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 namespace CustomPipelines
 {
@@ -31,6 +32,16 @@ namespace CustomPipelines
             this.size = stackSize;
             var result = arraySegment[stackSize];
             arraySegment[stackSize] = default;
+
+            using (StreamWriter writeFile = new StreamWriter(@"..\SegmentDump.txt", true))
+            {
+                writeFile.WriteLine($"Pop : {this.size}");
+            }
+
+            if ((CustomBufferSegment)result == null)
+            {
+                return new CustomBufferSegment();
+            }
             return result;
         }
 
@@ -53,6 +64,23 @@ namespace CustomPipelines
             else
             {
                 this.PushWithResize(item);
+            }
+
+            try
+            {
+                if ((CustomBufferSegment)this.array[stackSize] == null)
+                {
+                    int i = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                int p = 0;
+            }
+
+            using (StreamWriter writeFile = new StreamWriter(@"..\SegmentDump.txt", true))
+            {
+                writeFile.WriteLine($"Push : {this.size}");
             }
 
             return true;

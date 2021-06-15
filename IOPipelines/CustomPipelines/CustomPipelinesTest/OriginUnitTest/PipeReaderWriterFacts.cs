@@ -493,7 +493,7 @@ namespace CustomPipelinesTest
             Assert.IsFalse(result.IsCompleted);
             Assert.AreEqual(3, result.Buffer.Value.Length);
 
-            pipe.Reader.AdvanceTo(readResult.Buffer.Value.End);
+            pipe.AdvanceTo(readResult.Buffer.Value.End);
         }
 
         private bool IsTaskWithResult<T>(ValueTask<T> task)

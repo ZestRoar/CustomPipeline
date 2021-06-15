@@ -38,7 +38,7 @@ namespace CustomPipelines
         }
 
         public long Length => customBuffer.UnconsumedBytes;
-        public ReadOnlySequence<byte> Buffer => customBuffer.ReadBuffer;
+        public ReadOnlySequence<byte> Buffer => this.customBuffer.ReadBuffer;
 
         public void RegisterTarget(int targetBytes)
             => this.customBuffer.RegisterTarget(targetBytes);
@@ -47,7 +47,7 @@ namespace CustomPipelines
         public void CancelRead() => this.pipeState.CancelRead();
 
         public ReadResult ReadResult =>
-            new(this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
+            new(this.Buffer, this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
         public WriteResult WriteResult =>
             new(this.pipeState.IsWritingCanceled, this.pipeState.IsWritingCompleted);
 
@@ -60,6 +60,11 @@ namespace CustomPipelines
             if (this.customBuffer.CheckWritingOutOfRange(bytes))
             {
                 throw new ArgumentOutOfRangeException();
+            }
+
+            if (!this.customBuffer.CanWrite)
+            {
+                return false;
             }
 
             this.customBuffer.Advance(bytes);
@@ -75,29 +80,42 @@ namespace CustomPipelines
                 throw new ArgumentOutOfRangeException();
             }
 
-            if (!this.customBuffer.CanWrite)
+            if (this.customBuffer.CanWrite)
             {
-                return this.customBuffer.WriteSignal;
+                this.customBuffer.Advance(bytes);
+                this.CommitWrittenBytes(); 
             }
-
-            this.customBuffer.Advance(bytes);
-
-            this.customBuffer.Commit();
 
             return this.customBuffer.WriteSignal;
         }
        
         private bool CommitWrittenBytes()
         {
-            var isWritable = this.customBuffer.Commit();
+            var isWritable = false;
+            lock (syncObject)
+            {
+                isWritable = this.customBuffer.Commit();
+
+                this.ValidateReadIfAwait();
+            }
+
+            return isWritable;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ValidateReadIfAwait()
+        {
+
             if (!this.customBuffer.CanRead && this.customBuffer.CheckReadable())
             {
+                Console.WriteLine($"Set Result : {this.customBuffer.ReadBuffer.Length}");
                 var result = new ReadResult(this.customBuffer.ReadBuffer,
                     this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
                 this.customBuffer.SetResult(result);
             }
-            return isWritable;
+
         }
+
 
         public Memory<byte>? GetWriterMemory(int sizeHint = 1)
         {
@@ -217,7 +235,11 @@ namespace CustomPipelines
                 throw new InvalidOperationException
                     ("Reading is not allowed after reader was completed.");
             }
-            this.customBuffer.AdvanceTo(ref endPosition);
+
+            lock (syncObject)
+            {
+                this.customBuffer.AdvanceTo(ref endPosition);
+            }
         }
 
         // =================================================================== Complete 

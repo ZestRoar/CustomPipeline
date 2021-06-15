@@ -41,7 +41,7 @@ namespace CustomPipelinesTest
 
             _pipe.TryRead(out var result);
             SequencePosition consumed = result.Buffer.Value.GetPosition(33);
-            _pipe.Reader.AdvanceTo(consumed, consumed);
+            _pipe.AdvanceTo(consumed);
 
             Assert.IsTrue(_pipe.WriteResult.IsCompleted);
 
@@ -61,7 +61,7 @@ namespace CustomPipelinesTest
 
             _pipe.TryRead(out var result);
             SequencePosition examined = result.Buffer.Value.GetPosition(33);
-            _pipe.Reader.AdvanceTo(result.Buffer.Value.Start, examined);
+            _pipe.AdvanceTo(result.Buffer.Value.Start);
 
             Assert.IsTrue(_pipe.WriteResult.IsCompleted);
             //FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
@@ -86,7 +86,7 @@ namespace CustomPipelinesTest
                     //await flushTask;
                 }
 
-                _pipe.Writer.Complete();
+                _pipe.CompleteWriter();
             }
 
             //Task writingTask = WriteLoopAsync();
@@ -97,13 +97,13 @@ namespace CustomPipelinesTest
 
                 if (result.IsCompleted)
                 {
-                    _pipe.Reader.AdvanceTo(result.Buffer.Value.End);
+                    _pipe.AdvanceTo(result.Buffer.Value.End);
 
                     Assert.AreEqual(PauseWriterThreshold * loops, result.Buffer.Value.Length);
                     break;
                 }
 
-                _pipe.Reader.AdvanceTo(result.Buffer.Value.Start, result.Buffer.Value.End);
+                _pipe.AdvanceTo(result.Buffer.Value.Start);
             }
 
             //await writingTask;
@@ -119,7 +119,7 @@ namespace CustomPipelinesTest
 
             _pipe.TryRead(out var result, 1);
             SequencePosition consumed = result.Buffer.Value.GetPosition(ResumeWriterThreshold);
-            _pipe.Reader.AdvanceTo(consumed, consumed);
+            _pipe.AdvanceTo(consumed);
 
             Assert.IsFalse(_pipe.WriteResult.IsCompleted);
         }
@@ -134,7 +134,7 @@ namespace CustomPipelinesTest
 
             _pipe.TryRead(out var result, 1);
             SequencePosition consumed = result.Buffer.Value.GetPosition(33);
-            _pipe.Reader.AdvanceTo(consumed, consumed);
+            _pipe.AdvanceTo(consumed);
 
             Assert.IsTrue(_pipe.WriteResult.IsCompleted);
             //FlushResult flushResult = flushAsync.GetAwaiter().GetResult();
@@ -154,7 +154,7 @@ namespace CustomPipelinesTest
 
             Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
-            _pipe.Reader.Complete();
+            _pipe.CompleteReader();
 
             Assert.IsTrue(_pipe.WriteResult.IsCompleted);
             _pipe.Flush();
@@ -176,7 +176,7 @@ namespace CustomPipelinesTest
             Assert.IsFalse(_pipe.WriteResult.IsCompleted);
 
             _pipe.TryRead(out var result, 1);
-            _pipe.Reader.Complete();
+            _pipe.CompleteReader();
 
             Assert.IsTrue(_pipe.WriteResult.IsCompleted);
             _pipe.Flush();
@@ -210,7 +210,7 @@ namespace CustomPipelinesTest
         [TestMethod]
         public async Task FlushAsyncThrowsIfReaderCompletedWithException()
         {
-            _pipe.Reader.Complete(new InvalidOperationException("Reader failed"));
+            _pipe.CompleteReader(new InvalidOperationException("Reader failed"));
 
             _pipe.WriteEmpty(PauseWriterThreshold);
             InvalidOperationException invalidOperationException = Assert.ThrowsException<InvalidOperationException>(() => _pipe.Flush());
