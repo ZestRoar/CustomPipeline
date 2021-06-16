@@ -34,8 +34,8 @@ namespace CustomPipelines
 
         public bool CheckPauseWriter(long oldBytes, long currentBytes)
             => oldBytes < PauseWriterThreshold && currentBytes >= PauseWriterThreshold;
-        public bool CheckResumeWriter(long oldBytes, long currentBytes)
-            => oldBytes >= ResumeWriterThreshold && currentBytes < ResumeWriterThreshold;
+        public bool CheckResumeWriter(long currentBytes)
+            => currentBytes < ResumeWriterThreshold;
 
         /// <summary>Flush 쓰기 작업 중단 바이트</summary>
         public long PauseWriterThreshold { get; } 

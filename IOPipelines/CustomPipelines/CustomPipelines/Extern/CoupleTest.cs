@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace CustomPipelines
 {
@@ -26,19 +22,24 @@ namespace CustomPipelines
         private bool writeSet = true;
         private bool readSet = true;
 
+        private bool readLength = true;
+        private int targetBytes = 4;
+
         public void CoupleThreadTest()
         {
-            pipe = new CustomPipe();
+            this.pipe = new CustomPipe();
 
-            testNum = 1;
-            writeNum = TESTCOUNT;
-            readNum = TESTCOUNT;
-            writeSet = true;
-            readSet = true;
+            this.testNum = 1;
+            this.writeNum = TESTCOUNT;
+            this.readNum = TESTCOUNT;
+            this.writeSet = true;
+            this.readSet = true;
 
-            writeArray = new int[TESTCOUNT];
-            readArray = new int[TESTCOUNT];
+            this.writeArray = new int[TESTCOUNT];
+            this.readArray = new int[TESTCOUNT];
 
+            this.readLength = true;
+            this.targetBytes = 4;
             var writeThread = new Thread(WriteWorker);
             var readThread = new Thread(ReadWorker);
 
@@ -48,13 +49,13 @@ namespace CustomPipelines
 
             while (testNum > 0)
             {
-                testNum = writeNum + readNum;
+                this.testNum = this.writeNum + this.readNum;
             }
 
-            int i = 0;
+            var i = 0;
             for (i = 0; i < TESTCOUNT; ++i)
             {
-                if (readArray[i] != writeArray[i])
+                if (this.readArray[i] != this.writeArray[i])
                 {
                     break;
                 }
@@ -72,72 +73,101 @@ namespace CustomPipelines
 
         public void ReadWorker()
         {
-            while (readNum > 0)
+            while (this.readNum > 0)
             {
-                if (readSet)
+                if (this.readNum == 999940)
                 {
-                    readSet = false;
-                    ReadAsync(SIZEOFINT, true);
+                    Console.WriteLine("Read Sleep For 1 Second");
+                    Thread.Sleep(1000);
+                }
+                if (this.readSet)
+                {
+                    this.readSet = false;
+                    ReadAsync();
                 }
             }
         }
 
-        public void TargetBytesProcess(ref ReadResult result, int readBytes)
+        public void TargetBytesProcess(ReadResult result)
         {
-            playCount++;
-            Console.WriteLine($"{writeNum.ToString()} : {readNum.ToString()} : {playCount.ToString()}");
+            int writeCount = TESTCOUNT - this.writeNum + 1;
+            int readCount = TESTCOUNT - this.readNum + 1;
+            this.playCount++;
+            Console.WriteLine($"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
+            using (StreamWriter processFile = new StreamWriter(@"..\processDump.txt", true))
+            {
+                processFile.WriteLine($"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
+                //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
+            }
 
+
+            if (writeCount < readCount)
+            {
+                int i = 0;
+            }
 
             var buffer = result.Buffer.Value;
 
             var bufferLength = buffer.Length;
             var oldLength = bufferLength;
-            bool readLength = true;
-            int targetBytes = 0;
-
+            
             while (true)
             {
-                if (readLength)
+                if (this.readLength)
                 {
-                    bool testBool = true;
-                    while (testBool)
+                    if (this.targetBytes != SIZEOFINT)
                     {
-                        testBool = false;
-                        try
+                        if (bufferLength < this.targetBytes)
                         {
-                            var readSpan = buffer.FirstSpan;
-                            Console.WriteLine($"스팬 : {readSpan.Length.ToString()} / {pipe.Buffer.Length}, {buffer.IsSingleSegment.ToString()}");
-                            targetBytes = MemoryMarshal.Read<int>(readSpan);
+                            break;
                         }
-                        catch (Exception ex)
+
+                        this.targetBytes -= SIZEOFINT;
+                        this.readLength = false;
+                        continue;
+                    }
+
+                    var sequenceReader = new SequenceReader<byte>(buffer);
+                    var readArray = new byte[4];
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        if (sequenceReader.TryRead(out var item))
                         {
-                            Console.WriteLine($"버그 : {ex.ToString()}");
-                            testBool = true;
+                            readArray[i] = item;
+                        }
+                        else
+                        {
+                            throw new Exception();
                         }
                     }
 
-                    readLength = false;
-                    if (bufferLength < targetBytes + SIZEOFINT)
+                    //Console.WriteLine($"스팬 : {buffer.Length}");
+                    this.targetBytes = MemoryMarshal.Read<int>(readArray);
+
+                    if (bufferLength < this.targetBytes + SIZEOFINT)
                     {
+                        this.targetBytes = this.targetBytes + SIZEOFINT;
                         break;
                     }
 
+                    this.readLength = false;
                 }
                 else
                 {
                     using (StreamWriter readFile = new StreamWriter(@"..\readDump.txt", true))
                     {
-                        readFile.WriteLine($"{TESTCOUNT - readNum} : {targetBytes.ToString()}");
-                        Console.WriteLine($"read : {targetBytes.ToString()} + 4");
+                        readFile.WriteLine($"{TESTCOUNT - readNum} : {this.targetBytes.ToString()}");
+                        //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
                     }
 
-                    readArray[TESTCOUNT - readNum] = targetBytes;
-                    readNum--;
+                    this.readArray[TESTCOUNT - readNum] = this.targetBytes;
+                    --this.readNum;
 
-                    bufferLength -= SIZEOFINT + targetBytes;
-                    buffer = buffer.Slice(SIZEOFINT + targetBytes);
+                    bufferLength -= SIZEOFINT + this.targetBytes;
+                    buffer = buffer.Slice(SIZEOFINT + this.targetBytes);
 
-                    readLength = true;
+                    this.readLength = true;
+                    this.targetBytes = SIZEOFINT;
                     if (bufferLength < SIZEOFINT)
                     {
 
@@ -147,53 +177,55 @@ namespace CustomPipelines
             }
 
             var consumePosition = oldLength - bufferLength;
-            if (consumePosition > 0)
-            {
-                var oldBufferLength = pipe.Buffer.Length;
-                pipe.AdvanceTo(result.Buffer.Value.GetPosition(consumePosition));
-                Console.WriteLine($"AdvanceTo : {consumePosition.ToString()} ( {oldBufferLength.ToString()} => {pipe.Buffer.Length.ToString()} )");
-            }
+            var oldBufferLength = this.pipe.Buffer.Length;
+            this.pipe.AdvanceTo(result.Buffer.Value.GetPosition(consumePosition));
+            Console.WriteLine($"AdvanceTo : {consumePosition.ToString()} ( {oldBufferLength.ToString()} => {this.pipe.Buffer.Length.ToString()} )");
 
-            readSet = true;
+            this.readSet = true;
 
         }
 
-        public void ReadAsync(int targetBytes, bool readLength)
+        public void ReadAsync()
         {
-            if (readNum <= 0)
+            if (this.readNum <= 0)
             {
-                pipe.CompleteWriter();
+                this.pipe.CompleteWriter();
             }
-            if (this.pipe.TryRead(out var result, targetBytes))
+            if (this.pipe.TryRead(out var result, this.targetBytes))
             {
-                Console.WriteLine($"TryRead: {targetBytes.ToString()} / {result.Buffer.Value.Length}");
-               
+                Console.WriteLine("");
+                Console.WriteLine($" [TryRead] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
+                this.TargetBytesProcess(result);
             }
             else
             {
-                this.pipe.Read(targetBytes).Then((results)
-                    => { Console.WriteLine($"ReadThen : {targetBytes.ToString()} / {result.Buffer.Value.Length}");
-                        this.TargetBytesProcess(ref results, targetBytes); });
+                Console.WriteLine("");
+                Console.WriteLine(" [Read] ");
+                this.pipe.Read(this.targetBytes).Then((results)
+                    => { Console.WriteLine($"[ReadThen] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
+                        this.TargetBytesProcess(results); });
             }
         }
 
         public void WriteWorker()
         {
-            while (writeNum > 0)
+            while (this.writeNum > 0)
             {
-                if (writeNum == 999980)
+                if (this.writeNum == 999980)
                 {
+                    Console.WriteLine("Write Sleep For 1 Second");
                     Thread.Sleep(1000);
                 }
 
-                if (writeNum == 999960)
+                if (this.writeNum == 999960)
                 {
+                    Console.WriteLine("Write Sleep For 3 Seconds");
                     Thread.Sleep(3000);
                 }
 
-                if (writeSet)
+                if (this.writeSet)
                 {
-                    writeSet = false;
+                    this.writeSet = false;
                     WriteAsync();
                 }
             }
@@ -201,17 +233,17 @@ namespace CustomPipelines
 
         public void WriteCallback()
         {
-            writeSet = true;
-            writeNum--;
+            this.writeSet = true;
+            --this.writeNum;
         }
 
         public void WriteAsync()
         {
             while (true)
             {
-                if (writeNum <= 0)
+                if (this.writeNum <= 0)
                 {
-                    pipe.CompleteWriter();
+                    this.pipe.CompleteWriter();
                     break;
                 }
 
@@ -235,8 +267,8 @@ namespace CustomPipelines
                 using (StreamWriter writeFile = new StreamWriter(@"..\writeDump.txt", true))
                 {
                     writeFile.WriteLine($"{TESTCOUNT - writeNum} : {randVal.ToString()}");
-                    Console.WriteLine($"write : {randVal.ToString()} + 4");
-                    writeArray[TESTCOUNT - writeNum] = randVal;
+                    //Console.WriteLine($"write : {randVal.ToString()} + 4");
+                    this.writeArray[TESTCOUNT - writeNum] = randVal;
                 }
 
                 // 대충 소켓으로부터 받는 코드

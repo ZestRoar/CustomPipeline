@@ -67,9 +67,10 @@ namespace CustomPipelines
                 return false;
             }
 
-            this.customBuffer.Advance(bytes);
+            // 점유하고 threshold 걸리면 알려주고 다음 동작 보류
+            var result = this.customBuffer.Advance(bytes); // true -> true 혹은 true -> false 일 때 Advance 실행
 
-            return CommitWrittenBytes();    // 점유하고 threshold 걸리면 알려주고 다음 동작 보류
+            return result;   
         }
 
         public Signal Advance(int bytes)
@@ -82,40 +83,11 @@ namespace CustomPipelines
 
             if (this.customBuffer.CanWrite)
             {
-                this.customBuffer.Advance(bytes);
-                this.CommitWrittenBytes(); 
+                this.customBuffer.Advance(bytes); // true -> true 일때만 Advance 실행, Threshold 걸리고 들어왔을 때는 무시되는 코드
             }
 
             return this.customBuffer.WriteSignal;
         }
-       
-        private bool CommitWrittenBytes()
-        {
-            var isWritable = false;
-            lock (syncObject)
-            {
-                isWritable = this.customBuffer.Commit();
-
-                this.ValidateReadIfAwait();
-            }
-
-            return isWritable;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void ValidateReadIfAwait()
-        {
-
-            if (!this.customBuffer.CanRead && this.customBuffer.CheckReadable())
-            {
-                Console.WriteLine($"Set Result : {this.customBuffer.ReadBuffer.Length}");
-                var result = new ReadResult(this.customBuffer.ReadBuffer,
-                    this.pipeState.IsReadingCanceled, this.pipeState.IsReadingCompleted);
-                this.customBuffer.SetResult(result);
-            }
-
-        }
-
 
         public Memory<byte>? GetWriterMemory(int sizeHint = 1)
         {
@@ -181,11 +153,11 @@ namespace CustomPipelines
         public bool WriteAndCommit(ReadOnlyMemory<byte> sourceMemory)
         {
             var result = Write(sourceMemory);
-            this.CommitWrittenBytes();
+            this.customBuffer.Commit();
             return result;
         }
 
-        public void Flush() => this.CommitWrittenBytes();
+        public void Flush() => this.customBuffer.Commit();
 
         // ===================================================================== Reader 
 
@@ -205,7 +177,7 @@ namespace CustomPipelines
 
             this.customBuffer.RegisterTarget(targetBytes);
 
-            return this.customBuffer.CheckReadable() ? true : false;
+            return this.customBuffer.CanRead;
         }
 
         public Future<ReadResult> Read(int targetBytes = 0)
@@ -217,7 +189,7 @@ namespace CustomPipelines
                 throw new InvalidOperationException("No Reading Allowed");
             }
 
-            this.RegisterTarget(targetBytes);
+            this.customBuffer.RegisterTarget(targetBytes);
 
             return this.customBuffer.ReadPromise;
         }
@@ -236,10 +208,8 @@ namespace CustomPipelines
                     ("Reading is not allowed after reader was completed.");
             }
 
-            lock (syncObject)
-            {
-                this.customBuffer.AdvanceTo(ref endPosition);
-            }
+            this.customBuffer.AdvanceTo(ref endPosition);
+            
         }
 
         // =================================================================== Complete 
@@ -280,7 +250,7 @@ namespace CustomPipelines
 
         public void CompleteWriter(Exception exception = null)
         {
-            this.CommitWrittenBytes(); // 보류 중인 버퍼 커밋
+            this.customBuffer.Commit(); // 보류 중인 버퍼 커밋
             this.pipeState.CompleteWrite();
 
             if (exception != null)
