@@ -1,11 +1,20 @@
 ﻿using System;
 using System.Buffers;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace CustomPipelines
 {
+    static class DebugManager
+    {
+        public static Object consoleSync = new ();
+        public static bool fileDump = false;
+        public static bool consoleDump = false;
+    }
+
     public class CoupleTest
     {
         private const int TESTCOUNT = 1000000;
@@ -13,8 +22,8 @@ namespace CustomPipelines
 
         private CustomPipe pipe;
         private int testNum;
-        private int writeNum = TESTCOUNT;
-        private int readNum = TESTCOUNT;
+        public int writeNum = TESTCOUNT;
+        public int readNum = TESTCOUNT;
         private int playCount = 0;
 
         private int[] writeArray;
@@ -25,8 +34,27 @@ namespace CustomPipelines
         private bool readLength = true;
         private int targetBytes = 4;
 
+        private Thread writeThread;
+
+        private delegate void TestMethod();
+
+        private TestMethod readTest;
+        private TestMethod writeTest;
+
+        public void SelectTestMethod()
+        {
+            readTest = this.ReadAsyncNormalTest;
+            //readTest = this.ReadAsyncSleepThenTest;
+
+            //writeTest = this.WriteAsyncHonestByte;
+            writeTest = this.WriteAsyncPartialByte;
+        }
+
+
         public void CoupleThreadTest()
         {
+            this.SelectTestMethod();
+
             this.pipe = new CustomPipe();
 
             this.testNum = 1;
@@ -40,16 +68,27 @@ namespace CustomPipelines
 
             this.readLength = true;
             this.targetBytes = 4;
-            var writeThread = new Thread(WriteWorker);
-            var readThread = new Thread(ReadWorker);
+            writeThread = new Thread(WriteWorker);
+            
 
-            readThread.Start();
+            ThreadPool.QueueUserWorkItem(ReadWorker, this);
             
             writeThread.Start();
 
-            while (testNum > 0)
+            while (this.testNum > 0)
             {
                 this.testNum = this.writeNum + this.readNum;
+                if (!DebugManager.consoleDump)
+                {
+                    lock (DebugManager.consoleSync)
+                    {
+                        //Console.SetCursorPosition(0, 0);
+                        var percentTemp = (10000 - (this.testNum / 200));
+                        Console.WriteLine(
+                            $"test 진행률 {(percentTemp / 100).ToString()}.{(percentTemp % 100).ToString()}% ({this.writeNum.ToString()}, {this.readNum.ToString()})");
+                    }
+                    //Thread.Sleep(1000);
+                }
             }
 
             var i = 0;
@@ -71,21 +110,18 @@ namespace CustomPipelines
             }
         }
 
-        public void ReadWorker()
+        public static void ReadWorker(object? test)
         {
-            while (this.readNum > 0)
+            var castTest = (CoupleTest) test;
+
+            if (castTest.readNum == 999940)
             {
-                if (this.readNum == 999940)
-                {
-                    Console.WriteLine("Read Sleep For 1 Second");
-                    Thread.Sleep(1000);
-                }
-                if (this.readSet)
-                {
-                    this.readSet = false;
-                    ReadAsync();
-                }
+                Console.WriteLine("Read Sleep For 1 Second");
+                Thread.Sleep(1000);
             }
+
+            castTest.readTest();
+
         }
 
         public void TargetBytesProcess(ReadResult result)
@@ -93,14 +129,23 @@ namespace CustomPipelines
             int writeCount = TESTCOUNT - this.writeNum + 1;
             int readCount = TESTCOUNT - this.readNum + 1;
             this.playCount++;
-            Console.WriteLine($"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
-            using (StreamWriter processFile = new StreamWriter(@"..\processDump.txt", true))
+            
+            if (DebugManager.consoleDump)
             {
-                processFile.WriteLine($"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
-                //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
+                Console.WriteLine(
+                    $"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
             }
 
-
+            if (DebugManager.fileDump)
+            {
+                using (StreamWriter processFile = new StreamWriter(@"..\processDump.txt", true))
+                {
+                    processFile.WriteLine(
+                        $"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
+                    //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
+                }
+            }
+            Console.WriteLine(writeCount.ToString());
             if (writeCount < readCount)
             {
                 int i = 0;
@@ -154,10 +199,13 @@ namespace CustomPipelines
                 }
                 else
                 {
-                    using (StreamWriter readFile = new StreamWriter(@"..\readDump.txt", true))
+                    if (DebugManager.fileDump)
                     {
-                        readFile.WriteLine($"{TESTCOUNT - readNum} : {this.targetBytes.ToString()}");
-                        //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
+                        using (StreamWriter readFile = new StreamWriter(@"..\readDump.txt", true))
+                        {
+                            readFile.WriteLine($"{TESTCOUNT - readNum} : {this.targetBytes.ToString()}");
+                            //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
+                        }
                     }
 
                     this.readArray[TESTCOUNT - readNum] = this.targetBytes;
@@ -170,7 +218,6 @@ namespace CustomPipelines
                     this.targetBytes = SIZEOFINT;
                     if (bufferLength < SIZEOFINT)
                     {
-
                         break;
                     }
                 }
@@ -179,13 +226,56 @@ namespace CustomPipelines
             var consumePosition = oldLength - bufferLength;
             var oldBufferLength = this.pipe.Buffer.Length;
             this.pipe.AdvanceTo(result.Buffer.Value.GetPosition(consumePosition));
-            Console.WriteLine($"AdvanceTo : {consumePosition.ToString()} ( {oldBufferLength.ToString()} => {this.pipe.Buffer.Length.ToString()} )");
+            if (DebugManager.consoleDump)
+            {
+                Console.WriteLine(
+                    $"AdvanceTo : {consumePosition.ToString()} ( {oldBufferLength.ToString()} => {this.pipe.Buffer.Length.ToString()} )");
+            }
 
-            this.readSet = true;
+            ThreadPool.QueueUserWorkItem(ReadWorker, this);
 
         }
 
-        public void ReadAsync()
+        public void ReadAsyncNormalTest()
+        {
+            if (this.readNum <= 0)
+            {
+                this.pipe.CompleteWriter();
+            }
+            if (this.pipe.TryRead(out var result, this.targetBytes))
+            {
+                if (DebugManager.consoleDump)
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine($" [TryRead] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
+                }
+
+
+                this.TargetBytesProcess(result);
+            }
+            else
+            {
+                if (DebugManager.consoleDump)
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine(" [Read] ");
+                }
+
+                this.pipe.Read(this.targetBytes).Then((results)
+                    =>
+                {
+                    if (DebugManager.consoleDump)
+                    {
+                        Console.WriteLine(
+                            $"[ReadThen] : {this.targetBytes.ToString()} / {results.Buffer.Value.Length}");
+                    }
+
+                    this.TargetBytesProcess(results);
+                });
+
+            }
+        }
+        public void ReadAsyncSleepThenTest()
         {
             if (this.readNum <= 0)
             {
@@ -201,9 +291,16 @@ namespace CustomPipelines
             {
                 Console.WriteLine("");
                 Console.WriteLine(" [Read] ");
-                this.pipe.Read(this.targetBytes).Then((results)
-                    => { Console.WriteLine($"[ReadThen] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
-                        this.TargetBytesProcess(results); });
+
+                var sleepFutureTest = this.pipe.Read(this.targetBytes);
+                Thread.Sleep(1000);
+                sleepFutureTest.Then((results)
+                    =>
+                {
+                    Console.WriteLine($"[ReadThen] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
+                    this.TargetBytesProcess(results);
+                });
+
             }
         }
 
@@ -226,18 +323,22 @@ namespace CustomPipelines
                 if (this.writeSet)
                 {
                     this.writeSet = false;
-                    WriteAsync();
+                    writeTest();
                 }
             }
         }
 
         public void WriteCallback()
         {
-            this.writeSet = true;
             --this.writeNum;
+            this.writeSet = true;
+        }
+        public void WriteCallbackPartial()
+        {
+            this.writeSet = true;
         }
 
-        public void WriteAsync()
+        public void WriteAsyncHonestByte()
         {
             while (true)
             {
@@ -264,7 +365,7 @@ namespace CustomPipelines
                 memory = memory.Value[4..];
                 source.CopyTo(memory.Value);
 
-                using (StreamWriter writeFile = new StreamWriter(@"..\writeDump.txt", true))
+                using (StreamWriter writeFile = new StreamWriter(@"..\writeHonestDump.txt", true))
                 {
                     writeFile.WriteLine($"{TESTCOUNT - writeNum} : {randVal.ToString()}");
                     //Console.WriteLine($"write : {randVal.ToString()} + 4");
@@ -275,7 +376,6 @@ namespace CustomPipelines
                 if (this.pipe.TryAdvance(randVal + 4) == false)
                 {
                     this.pipe.Advance(randVal + 4).OnCompleted(this.WriteCallback);
-                    
                     break;
                 }
                 else
@@ -283,6 +383,81 @@ namespace CustomPipelines
                     this.WriteCallback();
                     break;
                 }
+            }
+        }
+        public void WriteAsyncPartialByte()
+        {
+            while (true)
+            {
+                if (this.writeNum <= 0)
+                {
+                    this.pipe.CompleteWriter();
+                    break;
+                }
+
+                var rand = new Random();
+                var randVal = rand.Next(1, 64)+4;
+                
+                byte[] arrBytes = new byte[randVal];
+                BitConverter.GetBytes(randVal-4).CopyTo(arrBytes.AsSpan());
+                var source = new ReadOnlyMemory<byte>(arrBytes);
+
+                var randPart = rand.Next(1, randVal);
+                var randRemain = randVal;
+                while (true)
+                {
+                    var memory = this.pipe.GetWriterMemory(randPart);
+                    if (memory == null)
+                    {
+                        throw new InvalidOperationException();
+                    }
+
+                    var randPos = randVal - randRemain;
+                    source.Slice(randPos, randPart).CopyTo(memory.Value);
+
+                    if (DebugManager.fileDump)
+                    {
+                        using (StreamWriter writeFile = new StreamWriter(@"..\writePartialDump.txt", true))
+                        {
+                            writeFile.WriteLine(
+                                $"{TESTCOUNT - writeNum} : {randPart.ToString()} ({randPos.ToString()}/{randVal.ToString()}) , total : {this.pipe.Length.ToString()}");
+                        }
+                    }
+
+                    if (DebugManager.consoleDump)
+                    {
+                        Console.WriteLine(
+                            $"Partial Write : {randPart.ToString()} ({randPos.ToString()} => {(randPos + randPart).ToString()}/{randVal.ToString()})");
+                    }
+
+                    this.writeArray[TESTCOUNT - writeNum] = randVal-4;
+
+                    // 대충 소켓으로부터 받는 코드
+                    if (this.pipe.TryAdvance(randPart) == false)
+                    {
+                        this.pipe.Advance(randPart).OnCompleted(this.WriteCallbackPartial);
+                    }
+                    else
+                    {
+                        this.WriteCallbackPartial();
+                    }
+
+                    while (writeSet == false)
+                    {
+
+                    }
+
+                    randRemain = randRemain - randPart;
+                    if (randRemain == 0)
+                    {
+                        --this.writeNum;
+                        break;
+                    }
+                    randPart = rand.Next(1, randRemain);
+
+
+                }
+
             }
         }
 

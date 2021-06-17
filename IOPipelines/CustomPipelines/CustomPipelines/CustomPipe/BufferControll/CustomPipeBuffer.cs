@@ -65,8 +65,10 @@ namespace CustomPipelines
                    this.readTail, this.readTailIdx);
 
         public long UnconsumedBytes  => this.unconsumedBytes;
-        public bool CheckReadable() 
+        public bool CheckReadable()
             => (this.unconsumedBytes >= this.readTargetBytes);
+        public bool CheckReadableIfCommit()
+            => (this.unconsumedBytes+this.uncommittedBytes >= this.readTargetBytes);
         public bool CheckWritingOutOfRange(int bytes) 
             => (uint)bytes > (uint)this.writingHeadMemory.Length;
         public bool CheckWritable(int sizeHint)
@@ -79,12 +81,20 @@ namespace CustomPipelines
 
         public bool CanWrite { get; set; }
         public bool CanRead { get; set; }
-        
+
+        public bool CheckTarget(long bufferLength, int targetBytes)
+        {
+            this.readTargetBytes = targetBytes;
+
+            this.CanRead = bufferLength >= targetBytes;
+
+            return this.CanRead;
+        }
         public void RegisterTarget(int targetBytes)
         {
             this.readTargetBytes = targetBytes;
 
-            this.CanRead = this.CheckReadable();
+            this.CanRead = false;
         }
 
         // ======================================================== Advance & Commit
@@ -93,7 +103,11 @@ namespace CustomPipelines
         {
             AdvanceFrom(bytesWritten);
 
-            Console.WriteLine($"Advance : {bytesWritten.ToString()} ( {this.uncommittedBytes - bytesWritten} => {this.uncommittedBytes} )");
+            if (DebugManager.consoleDump)
+            {
+                Console.WriteLine(
+                    $"Advance : {bytesWritten.ToString()} ( {this.uncommittedBytes - bytesWritten} => {this.uncommittedBytes} )");
+            }
 
             if (!this.CanWrite)
             {
@@ -102,12 +116,22 @@ namespace CustomPipelines
 
             this.PauseWriterIfThreshold(out var writeLocked, bytesWritten);
 
+            bool readableIfCommit = false;
+
             if (!CanRead)
             {
-                Console.WriteLine("target exist!");
+                readableIfCommit = CheckReadableIfCommit();     // 커밋할 명분이 충족되어야 함
             }
 
-            return writeLocked || !CanRead ? this.Commit() : this.CanWrite;
+            if (DebugManager.consoleDump)
+            {
+                if (readableIfCommit)
+                {
+                    Console.WriteLine("target readable!");
+                }
+            }
+
+            return writeLocked || readableIfCommit ? this.Commit() : this.CanWrite;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -117,8 +141,7 @@ namespace CustomPipelines
             {
                 this.WriteSignal.Reset();
                 
-                var oldLength = this.unconsumedBytes + this.uncommittedBytes;
-                writeLocked = this.options.CheckPauseWriter(oldLength, oldLength + bytesWritten);
+                writeLocked = this.options.CheckPauseWriter(this.unconsumedBytes + this.uncommittedBytes + bytesWritten);
                 if (writeLocked)
                 {
                     Console.WriteLine("Write Locked!");
@@ -154,8 +177,18 @@ namespace CustomPipelines
             this.readTailIdx = this.writingHeadSegment.End;
 
             Interlocked.Exchange(ref this.unconsumedBytes, this.unconsumedBytes+this.uncommittedBytes);
-            Console.WriteLine($"Commit : {this.uncommittedBytes.ToString()} ( {this.unconsumedBytes - this.uncommittedBytes} => {this.unconsumedBytes} )");
+            if (DebugManager.consoleDump)
+            {
+                Console.WriteLine(
+                    $"Commit : {this.uncommittedBytes.ToString()} ( {this.unconsumedBytes - this.uncommittedBytes} => {this.unconsumedBytes} )");
+            }
+
             this.uncommittedBytes = 0;
+            
+            if (DebugManager.consoleDump)
+            {
+                Console.WriteLine($"Check : {CanRead.ToString()} , {CheckReadable().ToString()}");
+            }
 
             if (!CanRead && CheckReadable())
             {
@@ -168,10 +201,17 @@ namespace CustomPipelines
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ResumeReadIfAwait()
         {
-            Console.WriteLine($"SetResult : {this.ReadBuffer.Length.ToString()} ");
+            // Then 등록 전에 실행하면 에러이므로 스피닝
+
+            if (DebugManager.consoleDump)
+            {
+                Console.WriteLine($"SetResult : {this.ReadBuffer.Length.ToString()} ");
+            }
+
+
+            this.CanRead = true;
             Interlocked.Exchange(ref this.ReadPromise, new Future<ReadResult>())
                 .SetResult(new ReadResult(this.ReadBuffer, false, false));
-            this.CanRead = true;
 
         }
 

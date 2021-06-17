@@ -32,8 +32,8 @@ namespace CustomPipelines
             MinimumSegmentSize = minimumSegmentSize;
         }
 
-        public bool CheckPauseWriter(long oldBytes, long currentBytes)
-            => oldBytes < PauseWriterThreshold && currentBytes >= PauseWriterThreshold;
+        public bool CheckPauseWriter(long currentBytes)
+            => currentBytes >= PauseWriterThreshold;
         public bool CheckResumeWriter(long currentBytes)
             => currentBytes < ResumeWriterThreshold;
 

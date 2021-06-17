@@ -40,9 +40,6 @@ namespace CustomPipelines
         public long Length => customBuffer.UnconsumedBytes;
         public ReadOnlySequence<byte> Buffer => this.customBuffer.ReadBuffer;
 
-        public void RegisterTarget(int targetBytes)
-            => this.customBuffer.RegisterTarget(targetBytes);
-
         public void CancelWrite() => this.pipeState.CancelWrite();
         public void CancelRead() => this.pipeState.CancelRead();
 
@@ -173,11 +170,7 @@ namespace CustomPipelines
             result = new ReadResult(this.customBuffer.ReadBuffer,
                 this.pipeState.IsReadingCanceled, this.pipeState.IsWritingCompleted);
 
-            this.pipeState.ResumeRead();
-
-            this.customBuffer.RegisterTarget(targetBytes);
-
-            return this.customBuffer.CanRead;
+            return this.customBuffer.CheckTarget(result.Buffer!.Value.Length, targetBytes);
         }
 
         public Future<ReadResult> Read(int targetBytes = 0)
