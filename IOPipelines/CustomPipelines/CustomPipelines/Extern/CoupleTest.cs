@@ -87,7 +87,7 @@ namespace CustomPipelines
                         Console.WriteLine(
                             $"test 진행률 {(percentTemp / 100).ToString()}.{(percentTemp % 100).ToString()}% ({this.writeNum.ToString()}, {this.readNum.ToString()})");
                     }
-                    //Thread.Sleep(1000);
+                    Thread.Sleep(100);
                 }
             }
 
