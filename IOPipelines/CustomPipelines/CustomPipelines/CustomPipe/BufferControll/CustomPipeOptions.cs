@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace CustomPipelines
 {
-    internal class CustomPipeOptions
+    public class CustomPipeOptions
     {
         private const int DefaultMinimumSegmentSize = 4096;
         private const int DefaultPauseWriterThreshold = 65536;

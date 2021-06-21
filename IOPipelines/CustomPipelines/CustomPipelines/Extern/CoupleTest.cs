@@ -12,7 +12,7 @@ namespace CustomPipelines
     {
         public static Object consoleSync = new ();
         public static bool fileDump = false;
-        public static bool consoleDump = false;
+        public static bool consoleDump = true;
     }
 
     public class CoupleTest

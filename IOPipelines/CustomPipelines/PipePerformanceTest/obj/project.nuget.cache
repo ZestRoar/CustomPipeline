@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "VxW46fUHKo9DVITEgIeSZXMesgbEXYNkrixkE5N1958sT2NLKgx9xzjVOV23uwdFg/FKC5cqXok3EY0fPyY6kw==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\doggyfoot\\Desktop\\CustomPipeline\\IOPipelines\\CustomPipelines\\PipePerformanceTest\\PipePerformanceTest.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\doggyfoot\\.nuget\\packages\\system.io.pipelines\\5.0.1\\system.io.pipelines.5.0.1.nupkg.sha512"
+  ],
+  "logs": []
+}

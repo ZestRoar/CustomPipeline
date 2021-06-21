@@ -9,7 +9,7 @@ using Mad.Core.Concurrent.Synchronization;
 
 namespace CustomPipelines
 {
-    internal class CustomPipe : ICustomPipeWriter, ICustomPipeReader
+    public class CustomPipe : ICustomPipeWriter, ICustomPipeReader
     {
 #nullable enable
         internal const int MaxSegmentPoolSize = 256;
