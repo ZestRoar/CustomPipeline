@@ -98,7 +98,12 @@ namespace CustomPipelines
                 throw new ArgumentOutOfRangeException();
             }
 
-            this.customBuffer.AllocateWriteHead(sizeHint);
+            var remains = this.customBuffer.Memory.Length;
+            var shorts = this.customBuffer.AllocateWriteHead(sizeHint);
+            if (shorts != 0)
+            {
+                Console.WriteLine($"request : {sizeHint.ToString()}, lack : {shorts.ToString()}, remain : {remains.ToString()}");
+            }
 
             return this.customBuffer.Memory;
         }

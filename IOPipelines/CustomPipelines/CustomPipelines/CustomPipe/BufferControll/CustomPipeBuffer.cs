@@ -43,6 +43,7 @@ namespace CustomPipelines
         private int readTargetBytes;
         internal Signal WriteSignal;
         internal Future<ReadResult> ReadPromise;
+        private bool canRead = true;
 
 
         public CustomPipeBuffer(CustomPipeOptions options)
@@ -80,13 +81,17 @@ namespace CustomPipelines
         // ======================================================== Callback
 
         public bool CanWrite { get; set; }
-        public bool CanRead { get; set; }
+        public bool CanRead
+        {
+            get => canRead;
+            set => canRead = value;
+        }
 
         public bool CheckTarget(long bufferLength, int targetBytes)
         {
             this.readTargetBytes = targetBytes;
 
-            this.CanRead = bufferLength >= targetBytes;
+            this.CanRead = (bufferLength >= targetBytes);
 
             return this.CanRead;
         }
@@ -114,7 +119,7 @@ namespace CustomPipelines
                 return this.CanWrite;
             }
 
-            this.PauseWriterIfThreshold(out var writeLocked, bytesWritten);
+            this.PauseWriterIfThreshold(out var writeLocked);
 
             bool readableIfCommit = false;
 
@@ -135,16 +140,16 @@ namespace CustomPipelines
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void PauseWriterIfThreshold(out bool writeLocked, int bytesWritten)
+        private void PauseWriterIfThreshold(out bool writeLocked)
         {
             lock (syncWriterThreshold)  // Pause 중 AdvanceTo로 인한 Resume 누락을 방지
             {
                 this.WriteSignal.Reset();
                 
-                writeLocked = this.options.CheckPauseWriter(this.unconsumedBytes + this.uncommittedBytes + bytesWritten);
+                writeLocked = this.options.CheckPauseWriter(this.unconsumedBytes + this.uncommittedBytes);
                 if (writeLocked)
                 {
-                    Console.WriteLine("Write Locked!");
+                    Console.WriteLine($"Write Locked! : {this.unconsumedBytes.ToString()} + {this.uncommittedBytes.ToString()}");
                     this.CanWrite = false;
                 }
                 else
@@ -177,7 +182,7 @@ namespace CustomPipelines
             this.readTailIdx = this.writingHeadSegment.End;
 
             Interlocked.Exchange(ref this.unconsumedBytes, this.unconsumedBytes+this.uncommittedBytes);
-            if (DebugManager.consoleDump)
+            if (DebugManager.consoleDump || !this.CanWrite)
             {
                 Console.WriteLine(
                     $"Commit : {this.uncommittedBytes.ToString()} ( {this.unconsumedBytes - this.uncommittedBytes} => {this.unconsumedBytes} )");
@@ -185,7 +190,7 @@ namespace CustomPipelines
 
             this.uncommittedBytes = 0;
             
-            if (DebugManager.consoleDump)
+            if (DebugManager.consoleDump || !this.CanWrite)
             {
                 Console.WriteLine($"Check : {CanRead.ToString()} , {CheckReadable().ToString()}");
             }
@@ -208,8 +213,8 @@ namespace CustomPipelines
                 Console.WriteLine($"SetResult : {this.ReadBuffer.Length.ToString()} ");
             }
 
-
-            this.CanRead = true;
+            //Console.WriteLine("resume read!");
+            Volatile.Write(ref this.canRead, true);
             Interlocked.Exchange(ref this.ReadPromise, new Future<ReadResult>())
                 .SetResult(new ReadResult(this.ReadBuffer, false, false));
 
@@ -358,7 +363,7 @@ namespace CustomPipelines
                 var oldLength = Interlocked.Exchange(ref this.unconsumedBytes, this.unconsumedBytes - examinedBytes);
                 if ((this.CanWrite == false) && this.options.CheckResumeWriter(this.unconsumedBytes))
                 {
-                    Console.WriteLine("Write Unlocked!");
+                    Console.WriteLine($"Write Unlocked! : {(this.unconsumedBytes).ToString()}");
                     this.CanWrite = true;
                     this.WriteSignal.Set();
                 }
@@ -404,7 +409,6 @@ namespace CustomPipelines
             while (returnStart != null && returnStart != returnEnd)
             {
                 var next = returnStart.NextSegment;
-                returnStart.ResetMemory();
 
                 Debug.Assert(returnStart != this.readHead,
                     "Returning _readHead segment that's in use!");
@@ -412,6 +416,8 @@ namespace CustomPipelines
                     "Returning _readTail segment that's in use!");
                 Debug.Assert(returnStart != this.writingHeadSegment,
                     "Returning _writingHead segment that's in use!");
+
+                returnStart.ResetMemory();
 
                 lock (syncPushPop)
                 {

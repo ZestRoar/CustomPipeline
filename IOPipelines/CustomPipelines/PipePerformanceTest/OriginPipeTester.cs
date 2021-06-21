@@ -25,7 +25,7 @@ namespace PipePerformanceTest
         public void Advance(int bytes)
         {
             this.originPipe.Writer.Advance(bytes);
-        }
+        } 
 
         public void Read(FileStream fileStream, int bytes)
         {

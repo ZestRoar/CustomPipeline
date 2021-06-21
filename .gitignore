@@ -4,3 +4,4 @@ IOPipelines/CustomPipelines/CustomPipelines/Promise.cs
 IOPipelines/CustomPipelines/CustomPipelines/Signal.cs
 IOPipelines/CustomPipelines/CustomPipelines/ContinuationMode.cs
 IOPipelines/CustomPipelines/PipePerformanceTest/testFile.tmp
+IOPipelines/CustomPipelines/PipePerformanceTest/destFile.tmp

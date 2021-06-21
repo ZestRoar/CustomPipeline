@@ -12,7 +12,7 @@ namespace CustomPipelines
     {
         public static Object consoleSync = new ();
         public static bool fileDump = false;
-        public static bool consoleDump = true;
+        public static bool consoleDump = false;
     }
 
     public class CoupleTest
@@ -22,6 +22,7 @@ namespace CustomPipelines
 
         private CustomPipe pipe;
         private int testNum;
+        private int updateNum;
         public int writeNum = TESTCOUNT;
         public int readNum = TESTCOUNT;
         private int playCount = 0;
@@ -29,7 +30,6 @@ namespace CustomPipelines
         private int[] writeArray;
         private int[] readArray;
         private bool writeSet = true;
-        private bool readSet = true;
 
         private bool readLength = true;
         private int targetBytes = 4;
@@ -61,7 +61,6 @@ namespace CustomPipelines
             this.writeNum = TESTCOUNT;
             this.readNum = TESTCOUNT;
             this.writeSet = true;
-            this.readSet = true;
 
             this.writeArray = new int[TESTCOUNT];
             this.readArray = new int[TESTCOUNT];
@@ -78,17 +77,13 @@ namespace CustomPipelines
             while (this.testNum > 0)
             {
                 this.testNum = this.writeNum + this.readNum;
-                if (!DebugManager.consoleDump)
+                if (DebugManager.consoleDump && this.updateNum != this.testNum)
                 {
-                    lock (DebugManager.consoleSync)
-                    {
-                        //Console.SetCursorPosition(0, 0);
-                        var percentTemp = (10000 - (this.testNum / 200));
-                        Console.WriteLine(
-                            $"test 진행률 {(percentTemp / 100).ToString()}.{(percentTemp % 100).ToString()}% ({this.writeNum.ToString()}, {this.readNum.ToString()})");
-                    }
-                    Thread.Sleep(100);
+                    var percentTemp = (10000 - (this.testNum / 200));
+                    Console.WriteLine(
+                        $"test 진행률 {(percentTemp / 100).ToString()}.{(percentTemp % 100).ToString()}% ({this.writeNum.ToString()}, {this.readNum.ToString()})");
                 }
+                this.updateNum = this.testNum;
             }
 
             var i = 0;
@@ -112,6 +107,7 @@ namespace CustomPipelines
 
         public static void ReadWorker(object? test)
         {
+            //Console.WriteLine("read start");
             var castTest = (CoupleTest) test;
 
             if (castTest.readNum == 999940)
@@ -121,6 +117,8 @@ namespace CustomPipelines
             }
 
             castTest.readTest();
+
+            //Console.WriteLine("read end");
 
         }
 
@@ -144,11 +142,6 @@ namespace CustomPipelines
                         $"writeCount : {(writeCount).ToString()}, readCount : {readCount.ToString()}, processCount : {this.playCount.ToString()}");
                     //Console.WriteLine($"read : {targetBytes.ToString()} + 4");
                 }
-            }
-            Console.WriteLine(writeCount.ToString());
-            if (writeCount < readCount)
-            {
-                int i = 0;
             }
 
             var buffer = result.Buffer.Value;
@@ -182,7 +175,8 @@ namespace CustomPipelines
                         }
                         else
                         {
-                            throw new Exception();
+                            ThreadPool.QueueUserWorkItem(ReadWorker, this);
+                            return;      // 여기 들어오면 안되는데 들어오는 현상 발생해서 스피닝 처리 해둠
                         }
                     }
 
@@ -211,12 +205,14 @@ namespace CustomPipelines
                     this.readArray[TESTCOUNT - readNum] = this.targetBytes;
                     --this.readNum;
 
-                    bufferLength -= SIZEOFINT + this.targetBytes;
-                    buffer = buffer.Slice(SIZEOFINT + this.targetBytes);
+                    this.targetBytes = SIZEOFINT + this.targetBytes;
+                    bufferLength -= this.targetBytes;
+                    //Console.WriteLine($"slice : -{this.targetBytes.ToString()}");
+                    buffer = buffer.Slice(this.targetBytes);
 
                     this.readLength = true;
                     this.targetBytes = SIZEOFINT;
-                    if (bufferLength < SIZEOFINT)
+                    if (bufferLength < this.targetBytes)
                     {
                         break;
                     }
@@ -242,18 +238,7 @@ namespace CustomPipelines
             {
                 this.pipe.CompleteWriter();
             }
-            if (this.pipe.TryRead(out var result, this.targetBytes))
-            {
-                if (DebugManager.consoleDump)
-                {
-                    Console.WriteLine("");
-                    Console.WriteLine($" [TryRead] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
-                }
-
-
-                this.TargetBytesProcess(result);
-            }
-            else
+            if (this.pipe.TryRead(out var result, this.targetBytes) == false)
             {
                 if (DebugManager.consoleDump)
                 {
@@ -271,8 +256,17 @@ namespace CustomPipelines
                     }
 
                     this.TargetBytesProcess(results);
-                });
+                }); 
+            }
+            else
+            {
+                if (DebugManager.consoleDump)
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine($" [TryRead] : {this.targetBytes.ToString()} / {result.Buffer.Value.Length}");
+                }
 
+                this.TargetBytesProcess(result);
             }
         }
         public void ReadAsyncSleepThenTest()
@@ -446,6 +440,8 @@ namespace CustomPipelines
                     {
 
                     }
+
+                    writeSet = false;
 
                     randRemain = randRemain - randPart;
                     if (randRemain == 0)
