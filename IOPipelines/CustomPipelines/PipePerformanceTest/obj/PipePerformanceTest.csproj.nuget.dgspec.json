@@ -40,9 +40,17 @@
         "net5.0": {
           "targetAlias": "net5.0",
           "dependencies": {
+            "System.Diagnostics.PerformanceCounter": {
+              "target": "Package",
+              "version": "[5.0.1, )"
+            },
             "System.IO.Pipelines": {
               "target": "Package",
               "version": "[5.0.1, )"
+            },
+            "System.Management": {
+              "target": "Package",
+              "version": "[5.0.0, )"
             }
           },
           "imports": [

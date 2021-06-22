@@ -1,0 +1,7 @@
+test : CustomPipelines
+target : ../../../testFile.tmp
+time : 00:01:17.65
+cpu rate : average = 42.784973 % ( min : 0, max 51.682278 )
+ram usage : average = 52609.527 KB ( min : 36968, max 55396 )
+diskIO : average = 4.4134946 % ( min : 0, max 100 )
+

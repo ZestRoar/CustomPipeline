@@ -1,15 +1,8 @@
 ﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
-using System.IO.Pipelines;
-using System.Runtime.CompilerServices;
-using CustomPipelines;
-using ReadResult = CustomPipelines.ReadResult;
+using System.Diagnostics;
+using System.Linq;
 
 namespace PipePerformanceTest
 {
@@ -30,7 +23,12 @@ namespace PipePerformanceTest
         private CustomPipeTester customTester;
         private MadPipeTester madTester;
 
+        private PerformanceHelper testHelper;
+
         private int writtenBytes = 0;
+
+        private bool writeEnd = false;
+        private bool readEnd = false;
 
         private long TargetBytes { get; set; }
 
@@ -41,6 +39,8 @@ namespace PipePerformanceTest
 
         public void InitializeTargetPipe(PipeBrand testTarget)
         {
+            testHelper = new PerformanceHelper();
+            
             this.brand = testTarget;
 
             this.writeThread = new Thread(PipeWriterWork);
@@ -62,14 +62,21 @@ namespace PipePerformanceTest
 
         public void RunFileCopy(String filename = srcFileName)
         {
+            testHelper.StartTimer();
+
             this.targetFile = filename;
             this.TargetBytes = (new FileInfo(this.targetFile)).Length;
 
             this.writeThread.Start(this);
             this.readThread.Start(this);
 
-            this.writeThread.Join();
-            this.readThread.Join();
+            while (readEnd == false || writeEnd == false)
+            {
+                this.testHelper.CheckAllUsage();
+                Thread.Sleep(1000);
+            }
+
+            testHelper.StopTimer();
         }
 
         public bool CheckFile()
@@ -103,12 +110,25 @@ namespace PipePerformanceTest
         }
         public void DumpResult()
         {
-            using (StreamWriter readFile = new StreamWriter(@"..\DumpLog.txt", true))
+            using (StreamWriter readFile = new StreamWriter(@"..\..\..\DumpLog.txt", true))
             {
-                readFile.WriteLine($"{this.targetFile}");
-                readFile.WriteLine($"time : ");
-                readFile.WriteLine($"cpu  : ");
-                readFile.WriteLine($"ram  : ");
+                switch (this.brand)
+                {
+                    case PipeBrand.CUSTOM:
+                        readFile.WriteLine($"test : CustomPipelines");
+                        break;
+                    case PipeBrand.MAD:
+                        readFile.WriteLine($"test : MadPipelines");
+                        break;
+                    case PipeBrand.ORIGIN:
+                        readFile.WriteLine($"test : System.IO.Pipelines");
+                        break;
+                }
+                readFile.WriteLine($"target : {this.targetFile}");
+                readFile.WriteLine($"time : {testHelper.ElapsedToStringFormat()}");
+                readFile.WriteLine($"cpu rate : {testHelper.GetCPUInfo()}");
+                readFile.WriteLine($"ram usage : {testHelper.GetMemoryInfo()}");
+                readFile.WriteLine($"diskIO : {testHelper.GetDiskIOInfo()}");
                 readFile.WriteLine("");
             }
         }
@@ -133,6 +153,7 @@ namespace PipePerformanceTest
             srcFile.Close();
             Console.WriteLine("write finished");
             testPipe.CompleteWriter();
+            testPipe.writeEnd = true;
         }
         public static void PipeReaderWork(object? test)
         {
@@ -154,13 +175,14 @@ namespace PipePerformanceTest
                     readBytes = (int)(writeBytes - destFile.Length);
                 }
 
-                Console.WriteLine($"advanceTo : {readBytes.ToString()}, {destFile.Length.ToString()}");
+                //Console.WriteLine($"advanceTo : {readBytes.ToString()}, {destFile.Length.ToString()}");
                 testPipe.Read(destFile, readBytes);
             }
 
             destFile.Close();
             Console.WriteLine("read finished");
             testPipe.CompleteReader();
+            testPipe.readEnd = true;
         }
 
         public FileStream OpenSrcFile()
@@ -229,7 +251,7 @@ namespace PipePerformanceTest
                     this.customTester.CompleteWriter();
                     break;
                 case PipeBrand.MAD:
-                    this.madTester.CompleteWriter();
+                    //this.madTester.CompleteWriter();
                     break;
                 default:
                     this.originTester.CompleteWriter();
@@ -245,13 +267,15 @@ namespace PipePerformanceTest
                     this.customTester.CompleteReader();
                     break;
                 case PipeBrand.MAD:
-                    this.madTester.CompleteReader();
+                    //this.madTester.CompleteReader();
                     break;
                 default:
                     this.originTester.CompleteReader();
                     break;
             }
         }
+
+
 
     }
 }

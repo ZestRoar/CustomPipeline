@@ -101,7 +101,7 @@ namespace PipePerformanceTest
             }
 
             ++readCount;
-            Console.WriteLine($"AdvanceTo : {readCount.ToString()}");
+            //Console.WriteLine($"AdvanceTo : {readCount.ToString()}");
             lock (sync)
             {
                 this.customPipe.AdvanceTo(this.customPipe.Buffer.GetPosition(bytes));
@@ -112,11 +112,11 @@ namespace PipePerformanceTest
 
         public void CompleteWriter()
         {
-
+            this.customPipe.CompleteWriter();
         }
         public void CompleteReader()
         {
-
+            this.customPipe.CompleteReader();
         }
     }
 }
