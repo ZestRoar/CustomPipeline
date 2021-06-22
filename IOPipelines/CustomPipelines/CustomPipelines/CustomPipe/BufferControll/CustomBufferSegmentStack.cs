@@ -33,11 +33,6 @@ namespace CustomPipelines
             var result = arraySegment[stackSize];
             arraySegment[stackSize] = default;
 
-            using (StreamWriter writeFile = new StreamWriter(@"..\SegmentDump.txt", true))
-            {
-                writeFile.WriteLine($"Pop : {this.size}");
-            }
-
             if ((CustomBufferSegment)result == null)
             {
                 return new CustomBufferSegment();
@@ -76,11 +71,6 @@ namespace CustomPipelines
             catch (Exception ex)
             {
                 int p = 0;
-            }
-
-            using (StreamWriter writeFile = new StreamWriter(@"..\SegmentDump.txt", true))
-            {
-                writeFile.WriteLine($"Push : {this.size}");
             }
 
             return true;

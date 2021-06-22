@@ -162,21 +162,24 @@ namespace PipePerformanceTest
 
             var writeBytes = testPipe.TargetBytes;
 
-            while (writeBytes > destFile.Length)
+            var fileLength = destFile.Length;
+            while (writeBytes > fileLength)
             {
+                
                 var readBytes = Interlocked.Exchange(ref testPipe.writtenBytes, 0);
                 if (readBytes == 0)
                 {
                     continue;
                 }
 
-                if (readBytes > (int)(writeBytes - destFile.Length))
+                if (readBytes > (int)(writeBytes - fileLength))
                 {
-                    readBytes = (int)(writeBytes - destFile.Length);
+                    readBytes = (int)(writeBytes - fileLength);
                 }
 
-                //Console.WriteLine($"advanceTo : {readBytes.ToString()}, {destFile.Length.ToString()}");
+                //Console.WriteLine($"advanceTo : {readBytes.ToString()}, {fileLength.ToString()}");
                 testPipe.Read(destFile, readBytes);
+                fileLength = destFile.Length;
             }
 
             destFile.Close();

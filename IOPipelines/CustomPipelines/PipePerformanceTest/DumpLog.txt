@@ -40,3 +40,38 @@ cpu rate : average = 11.151782 % ( min : 0, max 23.855192 )
 ram usage : average = 550710.7 KB ( min : 50308, max 954012 )
 diskIO : average = 34.585346 % ( min : 0.2925644, max 100 )
 
+test : CustomPipelines
+target : ../../../testFile.tmp
+time : 00:01:18.57
+cpu rate : average = 43.0521 % ( min : 0, max 49.17302 )
+ram usage : average = 52115.01 KB ( min : 36800, max 55620 )
+diskIO : average = 4.525478 % ( min : 0.0815506, max 100 )
+
+test : System.IO.Pipelines
+target : ../../../testFile.tmp
+time : 00:00:03.06
+cpu rate : average = 8.13988 % ( min : 0, max 14.831847 )
+ram usage : average = 558957.3 KB ( min : 47192, max 937540 )
+diskIO : average = 49.85765 % ( min : 11.519363, max 100 )
+
+test : CustomPipelines
+target : ../../../testFile.tmp
+time : 00:00:11.26
+cpu rate : average = 12.455423 % ( min : 0, max 18.341345 )
+ram usage : average = 52301.816 KB ( min : 36604, max 54440 )
+diskIO : average = 11.482271 % ( min : 0, max 100 )
+
+test : CustomPipelines
+target : ../../../testFile.tmp
+time : 00:00:10.20
+cpu rate : average = 11.855327 % ( min : 0, max 14.906996 )
+ram usage : average = 53369.6 KB ( min : 36712, max 56064 )
+diskIO : average = 12.870808 % ( min : 0.17527771, max 100 )
+
+test : CustomPipelines
+target : ../../../testFile.tmp
+time : 00:00:03.07
+cpu rate : average = 13.662898 % ( min : 0, max 26.469687 )
+ram usage : average = 48661.332 KB ( min : 36804, max 54796 )
+diskIO : average = 36.277164 % ( min : 0.79946136, max 100 )
+

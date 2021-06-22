@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using CustomPipelines;
 
@@ -19,7 +20,7 @@ namespace PipePerformanceTest
 
         public CustomPipeTester()
         {
-            customPipe = new CustomPipe();
+            customPipe = new CustomPipe(new CustomPipeOptions(524288, 262144));
         }
 
         public Memory<byte> GetWriterMemory(int bytes)
@@ -29,16 +30,14 @@ namespace PipePerformanceTest
 
         public void Advance(int bytes)
         {
-            
-                if (this.customPipe.TryAdvance(bytes) == false)
-                {
-                    this.customPipe.Advance(bytes).OnCompleted(this.WriteCallback);
-                }
-                else
-                {
-                    this.WriteCallback();
-                }
-            
+            if (this.customPipe.TryAdvance(bytes) == false)
+            {
+                this.customPipe.Advance(bytes).OnCompleted(this.WriteCallback);
+            }
+            else
+            {
+                this.WriteCallback();
+            }
 
             while (true)
             {
@@ -49,6 +48,7 @@ namespace PipePerformanceTest
                 }
             }
         }
+
         public void WriteCallback()
         {
             ++writeCount;
