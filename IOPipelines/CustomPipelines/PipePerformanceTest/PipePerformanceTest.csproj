@@ -15,6 +15,9 @@
     <Reference Include="CustomPipelines">
       <HintPath>..\CustomPipelines\bin\Debug\net5.0\CustomPipelines.dll</HintPath>
     </Reference>
+    <Reference Include="MadPipeline">
+      <HintPath>..\..\Solution\MadPipeline\bin\x64\Debug\net5.0\MadPipeline.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

@@ -254,7 +254,7 @@ namespace PipePerformanceTest
                     this.customTester.CompleteWriter();
                     break;
                 case PipeBrand.MAD:
-                    //this.madTester.CompleteWriter();
+                    this.madTester.CompleteWriter();
                     break;
                 default:
                     this.originTester.CompleteWriter();
@@ -270,7 +270,7 @@ namespace PipePerformanceTest
                     this.customTester.CompleteReader();
                     break;
                 case PipeBrand.MAD:
-                    //this.madTester.CompleteReader();
+                    this.madTester.CompleteReader();
                     break;
                 default:
                     this.originTester.CompleteReader();
