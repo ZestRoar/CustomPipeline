@@ -31,8 +31,7 @@ namespace PipePerformanceTest
 
         public void Advance(int bytes)
         {
-            lock (sync)
-            {
+            
                 if (this.customPipe.TryAdvance(bytes) == false)
                 {
                     this.customPipe.Advance(bytes).OnCompleted(this.WriteCallback);
@@ -41,7 +40,7 @@ namespace PipePerformanceTest
                 {
                     this.WriteCallback();
                 }
-            }
+            
 
             while (true)
             {
@@ -55,25 +54,22 @@ namespace PipePerformanceTest
         public void WriteCallback()
         {
             ++writeCount;
-            Console.WriteLine($"Advance : {writeCount.ToString()}");
+            //Console.WriteLine($"Advance : {writeCount.ToString()}");
             this.writeSet = true;
         }
 
         public void Read(FileStream fileStream, int bytes)
         {
-            lock (sync)
+
+            if (this.customPipe.TryRead(out var result, bytes))
             {
-                if (this.customPipe.TryRead(out var result, bytes))
-                {
-                    ReadCallback(fileStream, result);
-                }
-                else
-                {
-                    this.customPipe.Read(bytes).Then((results) => { ReadCallback(fileStream, results); });
-                    this.customPipe.RequestRead();
-                }
+                ReadCallback(fileStream, result, bytes);
             }
-            
+            else
+            {
+                this.customPipe.Read(bytes).Then((results) => { ReadCallback(fileStream, results, bytes); });
+                this.customPipe.RequestRead();
+            }
 
             while (true)
             {
@@ -84,21 +80,43 @@ namespace PipePerformanceTest
                 }
             }
         }
-        public void ReadCallback(FileStream fileStream, ReadResult results)
+
+        public void ReadCallback(FileStream fileStream, ReadResult results, int bytes)
         {
+            var remains = bytes;
             foreach (var segment in results.Buffer)
             {
-                fileStream.Write(segment.Span);
+                var length = segment.ToArray().Length;
+                if (remains > length)
+                {
+                    remains -= length;
+                    fileStream.Write(segment.ToArray(), 0, length);
+                    continue;
+                }
+                else
+                {
+                    fileStream.Write(segment.ToArray(), 0, remains);
+                    break;
+                }
             }
 
             ++readCount;
             Console.WriteLine($"AdvanceTo : {readCount.ToString()}");
             lock (sync)
             {
-                this.customPipe.AdvanceTo(this.customPipe.Buffer.GetPosition(256));
+                this.customPipe.AdvanceTo(this.customPipe.Buffer.GetPosition(bytes));
             }
 
             this.readSet = true;
+        }
+
+        public void CompleteWriter()
+        {
+
+        }
+        public void CompleteReader()
+        {
+
         }
     }
 }

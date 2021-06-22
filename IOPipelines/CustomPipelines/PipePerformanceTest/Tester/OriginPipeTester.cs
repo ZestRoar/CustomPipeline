@@ -39,6 +39,14 @@ namespace PipePerformanceTest
             }
 
         }
+        public void CompleteWriter()
+        {
+
+        }
+        public void CompleteReader()
+        {
+
+        }
 
     }
 }
