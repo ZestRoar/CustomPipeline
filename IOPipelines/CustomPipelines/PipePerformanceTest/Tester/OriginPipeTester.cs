@@ -25,27 +25,58 @@ namespace PipePerformanceTest
         public void Advance(int bytes)
         {
             this.originPipe.Writer.Advance(bytes);
-        } 
+
+            this.originPipe.Writer.FlushAsync(); 
+        }
 
         public void Read(FileStream fileStream, int bytes)
         {
-            if (this.originPipe.Reader.TryRead(out var result) == false)
+            if (this.originPipe.Reader.TryRead(out var result) == true)
             {
-                this.originPipe.Reader.ReadAsync();
+                ProcessCopy(fileStream, result, bytes);
             }
             else
             {
-                this.originPipe.Reader.AdvanceTo(result.Buffer.GetPosition(256));
+                _ = ReadTask(fileStream, bytes);
+            }
+        }
+
+        public async Task ReadTask(FileStream fileStream, int bytes)
+        {
+            ReadResult result = await this.originPipe.Reader.ReadAsync();;
+
+            ProcessCopy(fileStream, result, bytes);
+        }
+
+        public void ProcessCopy(FileStream fileStream, ReadResult results, int bytes)
+        {
+            var remains = bytes;
+            foreach (var segment in results.Buffer)
+            {
+                var length = segment.ToArray().Length;
+                if (remains > length)
+                {
+                    remains -= length;
+                    fileStream.Write(segment.ToArray(), 0, length);
+                    continue;
+                }
+                else
+                {
+                    fileStream.Write(segment.ToArray(), 0, remains);
+                    break;
+                }
             }
 
+            this.originPipe.Reader.AdvanceTo(results.Buffer.GetPosition(bytes));
         }
+
         public void CompleteWriter()
         {
-
+            this.originPipe.Writer.Complete();
         }
         public void CompleteReader()
         {
-
+            this.originPipe.Reader.Complete();
         }
 
     }

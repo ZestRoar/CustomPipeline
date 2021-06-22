@@ -17,8 +17,6 @@ namespace PipePerformanceTest
         private int writeCount = 0;
         private int readCount = 0;
 
-        private Object sync = new object();
-
         public CustomPipeTester()
         {
             customPipe = new CustomPipe();
@@ -102,10 +100,7 @@ namespace PipePerformanceTest
 
             ++readCount;
             //Console.WriteLine($"AdvanceTo : {readCount.ToString()}");
-            lock (sync)
-            {
-                this.customPipe.AdvanceTo(this.customPipe.Buffer.GetPosition(bytes));
-            }
+            this.customPipe.AdvanceTo(this.customPipe.Buffer.GetPosition(bytes));
 
             this.readSet = true;
         }
