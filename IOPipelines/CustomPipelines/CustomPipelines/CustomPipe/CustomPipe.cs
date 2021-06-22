@@ -53,12 +53,6 @@ namespace CustomPipelines
 
         public bool TryAdvance(int bytes)
         {
-            // 쓰기를 한 메모리 이상으로 커밋 불가능
-            if (this.customBuffer.CheckWritingOutOfRange(bytes))
-            {
-                throw new ArgumentOutOfRangeException();
-            }
-
             if (!this.customBuffer.CanWrite)
             {
                 return false;
@@ -72,12 +66,6 @@ namespace CustomPipelines
 
         public Signal Advance(int bytes)
         {
-            // 쓰기를 한 메모리 이상으로 커밋 불가능
-            if (this.customBuffer.CheckWritingOutOfRange(bytes))
-            {
-                throw new ArgumentOutOfRangeException();
-            }
-
             if (this.customBuffer.CanWrite)
             {
                 this.customBuffer.Advance(bytes); // true -> true 일때만 Advance 실행, Threshold 걸리고 들어왔을 때는 무시되는 코드
@@ -102,7 +90,7 @@ namespace CustomPipelines
             var shorts = this.customBuffer.AllocateWriteHead(sizeHint);
             if (shorts != 0)
             {
-                Console.WriteLine($"request : {sizeHint.ToString()}, lack : {shorts.ToString()}, remain : {remains.ToString()}");
+                //Console.WriteLine($"request : {sizeHint.ToString()}, lack : {shorts.ToString()}, remain : {remains.ToString()}");
             }
 
             return this.customBuffer.Memory;
@@ -190,6 +178,11 @@ namespace CustomPipelines
             this.customBuffer.RegisterTarget(targetBytes);
 
             return this.customBuffer.ReadPromise;
+        }
+
+        public void RequestRead()
+        {
+            this.customBuffer.RequestRead();
         }
 
         public void AdvanceToEnd()

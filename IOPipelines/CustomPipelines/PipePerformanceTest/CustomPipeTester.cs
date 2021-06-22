@@ -35,7 +35,6 @@ namespace PipePerformanceTest
             {
                 if (this.customPipe.TryAdvance(bytes) == false)
                 {
-                   
                     this.customPipe.Advance(bytes).OnCompleted(this.WriteCallback);
                 }
                 else
@@ -71,9 +70,10 @@ namespace PipePerformanceTest
                 else
                 {
                     this.customPipe.Read(bytes).Then((results) => { ReadCallback(fileStream, results); });
+                    this.customPipe.RequestRead();
                 }
             }
-
+            
 
             while (true)
             {

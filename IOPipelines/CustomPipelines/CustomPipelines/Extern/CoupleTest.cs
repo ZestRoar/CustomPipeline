@@ -26,6 +26,7 @@ namespace CustomPipelines
         public int writeNum = TESTCOUNT;
         public int readNum = TESTCOUNT;
         private int playCount = 0;
+        public int readerCount = 0;
 
         private int[] writeArray;
         private int[] readArray;
@@ -68,8 +69,8 @@ namespace CustomPipelines
             this.readLength = true;
             this.targetBytes = 4;
             writeThread = new Thread(WriteWorker);
-            
 
+            //++readerCount;
             ThreadPool.QueueUserWorkItem(ReadWorker, this);
             
             writeThread.Start();
@@ -77,11 +78,12 @@ namespace CustomPipelines
             while (this.testNum > 0)
             {
                 this.testNum = this.writeNum + this.readNum;
-                if (DebugManager.consoleDump && this.updateNum != this.testNum)
+                if (!DebugManager.consoleDump && this.updateNum != this.testNum)
                 {
                     var percentTemp = (10000 - (this.testNum / 200));
                     Console.WriteLine(
-                        $"test 진행률 {(percentTemp / 100).ToString()}.{(percentTemp % 100).ToString()}% ({this.writeNum.ToString()}, {this.readNum.ToString()})");
+                        $"test 진행률 {(percentTemp / 100).ToString()}.{(percentTemp % 100).ToString()}% ({this.writeNum.ToString()}, {this.readNum.ToString()})=========");
+
                 }
                 this.updateNum = this.testNum;
             }
@@ -118,8 +120,8 @@ namespace CustomPipelines
 
             castTest.readTest();
 
-            //Console.WriteLine("read end");
-
+            //--castTest.readerCount;
+            //Console.WriteLine($"read end : {castTest.readerCount.ToString()}");
         }
 
         public void TargetBytesProcess(ReadResult result)
@@ -175,6 +177,8 @@ namespace CustomPipelines
                         }
                         else
                         {
+                            //++readerCount;
+                            //Console.WriteLine($"read start : {readerCount.ToString()}");
                             ThreadPool.QueueUserWorkItem(ReadWorker, this);
                             return;      // 여기 들어오면 안되는데 들어오는 현상 발생해서 스피닝 처리 해둠
                         }
@@ -228,6 +232,8 @@ namespace CustomPipelines
                     $"AdvanceTo : {consumePosition.ToString()} ( {oldBufferLength.ToString()} => {this.pipe.Buffer.Length.ToString()} )");
             }
 
+            //++readerCount;
+            //Console.WriteLine($"read start : {readerCount.ToString()}");
             ThreadPool.QueueUserWorkItem(ReadWorker, this);
 
         }
@@ -256,7 +262,8 @@ namespace CustomPipelines
                     }
 
                     this.TargetBytesProcess(results);
-                }); 
+                });
+                this.pipe.RequestRead();
             }
             else
             {
