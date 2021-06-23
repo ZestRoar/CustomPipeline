@@ -18,12 +18,10 @@ namespace PipePerformanceTest
         private int writeCount = 0;
         private int readCount = 0;
 
-        private AutoResetEvent autoEvent;
 
         public CustomPipeTester()
         {
-            autoEvent = new AutoResetEvent(false);
-            customPipe = new CustomPipe(new CustomPipeOptions(524288, 262144));
+            customPipe = new CustomPipe(new CustomPipeOptions(2000000000, 1000000000));
         }
 
         public Memory<byte> GetWriterMemory(int bytes)
@@ -35,7 +33,7 @@ namespace PipePerformanceTest
         {
             if (this.customPipe.TryAdvance(bytes) == false)
             {
-                this.customPipe.Advance(bytes).OnCompleted(this.WriteCallback);
+                this.customPipe.WriteSignal().OnCompleted(this.WriteCallback);
             }
             else
             {
@@ -61,61 +59,50 @@ namespace PipePerformanceTest
 
         public void Read(FileStream fileStream, int bytes)
         {
-            autoEvent.Reset();
             if (this.customPipe.TryRead(out var result, bytes))
             {
                 ReadCallback(fileStream, result, bytes);
             }
             else
             {
-                Console.WriteLine("[Read Then]");
                 this.customPipe.Read(bytes).Then((results) => { ReadCallback(fileStream, results, bytes); });
                 this.customPipe.RequestRead();
-                autoEvent.WaitOne();
             }
 
-            //while (true)
-            //{
-            //    if (this.readSet)
-            //    {
-            //        this.readSet = false;
-            //        break;
-            //    }
-            //}
+            while (true)
+            {
+                if (this.readSet)
+                {
+                    this.readSet = false;
+                    break;
+                }
+            }
         }
 
         public void ReadCallback(FileStream fileStream, ReadResult results, int bytes)
         {
             var remains = bytes;
-            try
+            
+            foreach (var segment in results.Buffer)
             {
-                foreach (var segment in results.Buffer)
+                var length = segment.ToArray().Length;
+                if (remains > length)
                 {
-                    var length = segment.ToArray().Length;
-                    if (remains > length)
-                    {
-                        remains -= length;
-                        fileStream.Write(segment.ToArray(), 0, length);
-                        continue;
-                    }
-                    else
-                    {
-                        fileStream.Write(segment.ToArray(), 0, remains);
-                        break;
-                    }
+                    remains -= length;
+                    fileStream.Write(segment.ToArray(), 0, length);
+                    continue;
                 }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                throw;
+                else
+                {
+                    fileStream.Write(segment.ToArray(), 0, remains);
+                    break;
+                }
             }
 
             ++readCount;
-            //Console.WriteLine($"AdvanceTo : {readCount.ToString()}");
+            //Console.WriteLine($"AdvanceTo : {bytes.ToString()}");
             this.customPipe.AdvanceTo(this.customPipe.Buffer.GetPosition(bytes));
 
-            autoEvent.Set();
             this.readSet = true;
         }
 

@@ -97,7 +97,17 @@ namespace CustomPipelines
 
         public void RequestRead()
         {
-            this.canRead = false;
+            if (!this.canWrite)
+            {
+                if (CheckReadable())     
+                {
+                    ResumeReadIfAwait();
+                }
+            }
+            else
+            {
+                this.canRead = false;
+            }
         }
 
         // ======================================================== Advance & Commit
@@ -199,7 +209,7 @@ namespace CustomPipelines
             
             if (DebugManager.consoleDump || !this.canWrite)
             {
-                Console.WriteLine($"Check : {canRead.ToString()} , {CheckReadable().ToString()}");
+                Console.WriteLine($"Check : {canRead.ToString()} , {CheckReadable().ToString()}({readTargetBytes.ToString()})");
             }
 
             if (!canRead && CheckReadable())
@@ -215,7 +225,7 @@ namespace CustomPipelines
         {
             // Then 등록 전에 실행하면 에러이므로 스피닝
 
-            if (!DebugManager.consoleDump)
+            if (DebugManager.consoleDump)
             {
                 Console.WriteLine($"SetResult : {this.ReadBuffer.Length.ToString()} ");
             }

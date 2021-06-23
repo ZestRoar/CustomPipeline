@@ -37,6 +37,32 @@ namespace PipePerformanceTest
             targetFile = srcFileName;
         }
 
+        public void InitializeSelection()
+        {
+            Console.WriteLine("테스트 파이프라인을 선택해주세요.");
+            Console.WriteLine("1. CustomPipe  2. System.IO.Pipe  3. Madline");
+
+
+            while (true)
+            {
+                ConsoleKeyInfo keyInfo = Console.ReadKey(false);
+
+                switch (keyInfo.Key)
+                {
+                    case ConsoleKey.D1:
+                        InitializeTargetPipe(PipeBrand.CUSTOM);
+                        return;
+                    case ConsoleKey.D2:
+                        InitializeTargetPipe(PipeBrand.ORIGIN);
+                        return;
+                    case ConsoleKey.D3:
+                        InitializeTargetPipe(PipeBrand.MAD);
+                        return;
+                }
+            }
+
+        }
+
         public void InitializeTargetPipe(PipeBrand testTarget)
         {
             testHelper = new PerformanceHelper();
@@ -62,25 +88,34 @@ namespace PipePerformanceTest
 
         public void RunFileCopy(String filename = srcFileName)
         {
+            Console.Clear();
+            Console.WriteLine("테스트를 진행합니다.");
+
+
             testHelper.StartTimer();
 
             this.targetFile = filename;
             this.TargetBytes = (new FileInfo(this.targetFile)).Length;
 
-            this.writeThread.Start(this);
             this.readThread.Start(this);
+            this.writeThread.Start(this);
 
             while (readEnd == false || writeEnd == false)
             {
                 this.testHelper.CheckAllUsage();
-                Thread.Sleep(1000);
+                Thread.Sleep(500);
             }
 
             testHelper.StopTimer();
+
+            Console.WriteLine("테스트가 종료되었습니다.");
+
         }
 
         public bool CheckFile()
         {
+            Console.WriteLine("파일이 제대로 복사되었는지 검사합니다.");
+
             var srcFile = new FileStream(this.targetFile, FileMode.Open);
             var destFile = new FileStream(destFileName, FileMode.Open);
 
@@ -110,26 +145,41 @@ namespace PipePerformanceTest
         }
         public void DumpResult()
         {
+            Console.WriteLine("");
+            Console.WriteLine("======== 테스트 결과 ========");
             using (StreamWriter readFile = new StreamWriter(@"..\..\..\DumpLog.txt", true))
             {
                 switch (this.brand)
                 {
                     case PipeBrand.CUSTOM:
                         readFile.WriteLine($"test : CustomPipelines");
+                        Console.WriteLine($"대상 : CustomPipelines");
                         break;
                     case PipeBrand.MAD:
                         readFile.WriteLine($"test : MadPipelines");
+                        Console.WriteLine($"대상 : MadPipelines");
                         break;
                     case PipeBrand.ORIGIN:
                         readFile.WriteLine($"test : System.IO.Pipelines");
+                        Console.WriteLine($"대상 : System.IO.Pipelines");
                         break;
                 }
                 readFile.WriteLine($"target : {this.targetFile}");
-                readFile.WriteLine($"time : {testHelper.ElapsedToStringFormat()}");
-                readFile.WriteLine($"cpu rate : {testHelper.GetCPUInfo()}");
-                readFile.WriteLine($"ram usage : {testHelper.GetMemoryInfo()}");
-                readFile.WriteLine($"diskIO : {testHelper.GetDiskIOInfo()}");
+                var size = new FileInfo(this.targetFile).Length;
+                size = size / 1024 / 1024;
+                readFile.WriteLine($"size : {size.ToString()} MB");
+                readFile.WriteLine($"time : {this.testHelper.ElapsedToStringFormat()}");
+                readFile.WriteLine($"cpu rate : {this.testHelper.GetCPUInfo()}");
+                readFile.WriteLine($"ram usage : {this.testHelper.GetMemoryInfo()}");
+                readFile.WriteLine($"diskIO : {this.testHelper.GetDiskIOInfo()}");
                 readFile.WriteLine("");
+                Console.WriteLine($"대상 파일 : {this.targetFile}");
+                Console.WriteLine($"복사 크기 : {size.ToString()} MB");
+                Console.WriteLine($"걸린 시간 : {this.testHelper.ElapsedToStringFormat()}");
+                Console.WriteLine($"CPU 사용률 : {this.testHelper.GetCPUInfo()}");
+                Console.WriteLine($"RAM 사용량 : {this.testHelper.GetMemoryInfo()}");
+                Console.WriteLine($"디스크 입출력 : {this.testHelper.GetDiskIOInfo()}");
+                Console.WriteLine("");
             }
         }
 
@@ -145,9 +195,9 @@ namespace PipePerformanceTest
                 var memory = testPipe.GetWriterMemory(4096);
                 var advanceBytes = srcFile.Read(memory.Span);
                 readBytes -= advanceBytes;
-                Interlocked.Exchange(ref testPipe.writtenBytes, testPipe.writtenBytes + advanceBytes);
                 //Console.WriteLine($"advance : {advanceBytes.ToString()}");
                 testPipe.Advance(advanceBytes);
+                Interlocked.Add(ref testPipe.writtenBytes, advanceBytes);
             }
 
             srcFile.Close();
@@ -160,26 +210,24 @@ namespace PipePerformanceTest
             var testPipe = (PipePerformanceTest) test;
             var destFile = testPipe.OpenDestFile();
 
-            var writeBytes = testPipe.TargetBytes;
-
-            var fileLength = destFile.Length;
-            while (writeBytes > fileLength)
+            var remainBytes = (int) (testPipe.TargetBytes - destFile.Length);
+            while (remainBytes > 0)
             {
-                
+                //Console.WriteLine($"consume : {testPipe.writtenBytes.ToString()}");
                 var readBytes = Interlocked.Exchange(ref testPipe.writtenBytes, 0);
                 if (readBytes == 0)
                 {
                     continue;
                 }
 
-                if (readBytes > (int)(writeBytes - fileLength))
+                if (readBytes > remainBytes)
                 {
-                    readBytes = (int)(writeBytes - fileLength);
+                    readBytes = remainBytes;
                 }
 
                 //Console.WriteLine($"advanceTo : {readBytes.ToString()}, {fileLength.ToString()}");
                 testPipe.Read(destFile, readBytes);
-                fileLength = destFile.Length;
+                remainBytes = (int)(testPipe.TargetBytes - destFile.Length);
             }
 
             destFile.Close();

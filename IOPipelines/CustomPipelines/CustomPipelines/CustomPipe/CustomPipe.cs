@@ -74,6 +74,11 @@ namespace CustomPipelines
             return this.customBuffer.WriteSignal;
         }
 
+        public Signal WriteSignal()
+        {
+            return this.customBuffer.WriteSignal;
+        }
+
         public Memory<byte>? GetWriterMemory(int sizeHint = 1)
         {
             if (this.pipeState.IsWritingCompleted)
