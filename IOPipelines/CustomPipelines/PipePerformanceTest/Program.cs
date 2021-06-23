@@ -10,9 +10,9 @@ namespace PipePerformanceTest
         {
             var testApp = new PipePerformanceTest();
 
-            testApp.InitializeTargetPipe(PipeBrand.CUSTOM);
+            //testApp.InitializeTargetPipe(PipeBrand.CUSTOM);
             //testApp.InitializeTargetPipe(PipeBrand.ORIGIN);
-            //testApp.InitializeTargetPipe(PipeBrand.MAD);
+            testApp.InitializeTargetPipe(PipeBrand.MAD);
 
             testApp.RunFileCopy();
             //testApp.RunFileCopy("../../../testTxt.txt");

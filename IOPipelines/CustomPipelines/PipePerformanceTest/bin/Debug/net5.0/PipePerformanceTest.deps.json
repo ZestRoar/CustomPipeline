@@ -11,7 +11,8 @@
           "System.Diagnostics.PerformanceCounter": "5.0.1",
           "System.IO.Pipelines": "5.0.1",
           "System.Management": "5.0.0",
-          "CustomPipelines": "1.0.0.0"
+          "CustomPipelines": "1.0.0.0",
+          "MadPipeline": "1.0.0.0"
         },
         "runtime": {
           "PipePerformanceTest.dll": {}
@@ -200,6 +201,14 @@
             "fileVersion": "1.0.0.0"
           }
         }
+      },
+      "MadPipeline/1.0.0.0": {
+        "runtime": {
+          "MadPipeline.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -308,6 +317,11 @@
       "hashPath": "system.windows.extensions.5.0.0.nupkg.sha512"
     },
     "CustomPipelines/1.0.0.0": {
+      "type": "reference",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "MadPipeline/1.0.0.0": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
