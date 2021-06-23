@@ -12,6 +12,7 @@ namespace PipePerformanceTest
             while (true)
             {
                 var testApp = new PipePerformanceTest();
+                GC.Collect();
 
                 testApp.InitializeSelection();
                 //testApp.InitializeTargetPipe(PipeBrand.CUSTOM);

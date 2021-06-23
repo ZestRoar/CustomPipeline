@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace PipePerformanceTest
 {
@@ -31,6 +32,8 @@ namespace PipePerformanceTest
         private bool readEnd = false;
 
         private long TargetBytes { get; set; }
+
+        public int RemainBytes { get; set; }
 
         public PipePerformanceTest()
         {
@@ -205,13 +208,15 @@ namespace PipePerformanceTest
             testPipe.CompleteWriter();
             testPipe.writeEnd = true;
         }
+
+
         public static void PipeReaderWork(object? test)
         {
             var testPipe = (PipePerformanceTest) test;
             var destFile = testPipe.OpenDestFile();
 
-            var remainBytes = (int) (testPipe.TargetBytes - destFile.Length);
-            while (remainBytes > 0)
+            testPipe.RemainBytes = (int) (testPipe.TargetBytes - destFile.Length);
+            while (testPipe.RemainBytes > 0)
             {
                 //Console.WriteLine($"consume : {testPipe.writtenBytes.ToString()}");
                 var readBytes = Interlocked.Exchange(ref testPipe.writtenBytes, 0);
@@ -220,14 +225,14 @@ namespace PipePerformanceTest
                     continue;
                 }
 
-                if (readBytes > remainBytes)
+                if (readBytes > testPipe.RemainBytes)
                 {
-                    readBytes = remainBytes;
+                    readBytes = testPipe.RemainBytes;
                 }
 
                 //Console.WriteLine($"advanceTo : {readBytes.ToString()}, {fileLength.ToString()}");
                 testPipe.Read(destFile, readBytes);
-                remainBytes = (int)(testPipe.TargetBytes - destFile.Length);
+                testPipe.RemainBytes = (int)(testPipe.TargetBytes - destFile.Length);
             }
 
             destFile.Close();
