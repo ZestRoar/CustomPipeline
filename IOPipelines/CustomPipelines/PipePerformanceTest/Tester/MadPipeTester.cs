@@ -2,104 +2,149 @@
 {
     using System;
     using System.IO;
-    using System.Buffers;
+    using System.Threading;
     using MadPipeline;
+    using System.Buffers;
 
-    class MadPipeTester
+    public partial class PipePerformanceTest
     {
         private Madline madline;
         private IMadlineWriter madWriter;
         private IMadlineReader madReader;
 
-        private bool writeSet = false;
-        private bool readSet = false;
+        private FileStream srcFile;
+        private FileStream destFile;
 
-        private int writeCount = 0;
-        private int readCount = 0;
+        private long writeRemainBytes;
+        private long readRemainBytes;
 
-        public MadPipeTester()
+        public void RunMadFileCopy(String filename = srcFileName)
         {
-            var options = new MadlineOptions();
-            this.madline = new Madline(options);
+            var malineOptions = new MadlineOptions();
+            this.madline = new Madline(malineOptions);
             this.madWriter = this.madline;
             this.madReader = this.madline;
-        }
 
-        public Memory<byte> GetWriterMemory(int bytes)
-        {
-            return this.madWriter.GetMemory(bytes);
-        }
+            Console.Clear();
+            Console.WriteLine("테스트를 진행합니다.");
 
-        public void Advance(int bytes)
-        {
-            if (this.madWriter.TryAdvance(bytes))
+
+            testHelper.StartTimer();
+
+            this.targetFile = filename;
+            this.srcFile = new FileStream(filename, FileMode.Open);
+            this.destFile = new FileStream(destFileName, FileMode.Create);
+            this.TargetBytes = (new FileInfo(this.targetFile)).Length;
+            this.readRemainBytes = this.TargetBytes;
+            this.writeRemainBytes = this.TargetBytes;
+
+            this.writeThread = new Thread(MadStartWrite);
+            this.readThread = new Thread(MadStartRead);
+            this.writeThread.Start();
+            this.readThread.Start();
+
+            while (this.readEnd == false || this.writeEnd == false)
             {
+                this.testHelper.CheckAllUsage();
+                Thread.Sleep(500);
+            }
+
+            writeThread.Join();
+            readThread.Join();
+            this.testHelper.CheckAllUsage();
+
+            testHelper.StopTimer();
+
+            Console.WriteLine("테스트가 종료되었습니다.");
+
+        }
+
+        public void MadStartWrite()
+        {
+            while (this.writeRemainBytes > 0)
+            {
+                if (this.madline.State.IsWritingPaused == false)
+                {
+                    this.WriteProcess();
+                }
+            }
+            srcFile.Close();
+            Console.WriteLine("write finished");
+            this.madline.CompleteWriter();
+            this.writeEnd = true;
+        }
+
+        public void MadStartRead()
+        {
+            do
+            {
+                if (this.madline.State.IsReadingPaused == false)
+                {
+                    this.ReadProcess();
+                }
+            } while (this.readRemainBytes > 0);
+
+            destFile.Close();
+            Console.WriteLine("read finished");
+            this.madline.CompleteReader();
+            this.readEnd = true;
+        }
+
+        public void WriteProcess()
+        {
+            if (this.madline.WriteCheck())
+            {
+                var memory = this.madWriter.GetMemory(4096);
+                var advanceBytes = srcFile.Read(memory.Span);
+                this.writeRemainBytes -= advanceBytes;
+                this.madWriter.Advance(advanceBytes);
                 this.madWriter.Flush();
             }
             else
             {
-                this.madWriter.WriteSignal().OnCompleted(() =>
-                {
-                    this.madWriter.Advance(bytes);
-                    this.madWriter.Flush();
-                });
-            }
-
-            while (this.madline.State.IsWritingPaused)
-            {
+                this.madWriter.WriteSignal().OnCompleted(
+                    () =>
+                    {
+                        this.WriteProcess();
+                    });
             }
         }
 
-        // 반드시 청크 형식으로 된 것만..
-        public void Read(FileStream fileStream, int bytes)
+        public void ReadProcess()
         {
             if (this.madReader.TryRead(out var result, 0))
             {
-                this.ProcessCopy(fileStream, in result, bytes);
+                this.SendToFile(in result);
             }
             else
             {
                 this.madReader.DoRead().Then(
                     readResult =>
                     {
-                        this.ProcessCopy(fileStream, in readResult, bytes);
+                        this.SendToFile(in readResult);
                     });
-
-            }
-
-            while (this.madline.State.IsReadingPaused)
-            {
             }
         }
-        public void ProcessCopy(FileStream fileStream, in ReadOnlySequence<byte> result, int bytes)
+        public void SendToFile(in ReadOnlySequence<byte> result)
         {
-            var remains = bytes;
+            var remains = result.Length;
             foreach (var segment in result)
             {
                 var length = segment.ToArray().Length;
+                this.readRemainBytes -= length;
                 if (remains > length)
                 {
-                    remains -= length;
-                    fileStream.Write(segment.ToArray(), 0, length);
+                    this.destFile.Write(segment.ToArray(), 0, length);
                     continue;
                 }
                 else
                 {
-                    fileStream.Write(segment.ToArray(), 0, remains);
+                    this.destFile.Write(segment.ToArray(), 0, (int)remains);
                     break;
                 }
             }
-
-            this.madReader.AdvanceTo(result.GetPosition(bytes));
+            this.madReader.AdvanceTo(result.End);
         }
 
-        public void CompleteWriter()
-        {
-            this.madWriter.CompleteWriter();
-        }
-        public void CompleteReader()
-        {
-            this.madReader.CompleteReader();
-        }
     }
 }

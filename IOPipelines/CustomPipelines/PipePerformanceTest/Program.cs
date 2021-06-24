@@ -19,7 +19,14 @@ namespace PipePerformanceTest
                 //testApp.InitializeTargetPipe(PipeBrand.ORIGIN);
                 //testApp.InitializeTargetPipe(PipeBrand.MAD);
 
-                testApp.RunFileCopy();
+                if (testApp.brand != PipeBrand.MAD)
+                {
+                    testApp.RunFileCopy();
+                }
+                else
+                {
+                    testApp.RunMadFileCopy();
+                }
                 //testApp.RunFileCopy("../../../testTxt.txt");
 
                 if (testApp.CheckFile())

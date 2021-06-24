@@ -9,12 +9,12 @@ namespace PipePerformanceTest
 {
     public enum PipeBrand {CUSTOM, MAD, ORIGIN}
 
-    public class PipePerformanceTest
+    public partial class PipePerformanceTest
     {
         private const string srcFileName = "../../../testFile.tmp";
         private const string destFileName = "../../../destFile.tmp";
 
-        private PipeBrand brand;
+        public PipeBrand brand;
 
         private Thread writeThread;
         private Thread readThread;
@@ -22,7 +22,6 @@ namespace PipePerformanceTest
 
         private OriginPipeTester originTester;
         private CustomPipeTester customTester;
-        private MadPipeTester madTester;
 
         private PerformanceHelper testHelper;
 
@@ -79,9 +78,6 @@ namespace PipePerformanceTest
             {
                 case PipeBrand.CUSTOM:
                     this.customTester = new CustomPipeTester();
-                    break;
-                case PipeBrand.MAD:
-                    this.madTester = new MadPipeTester();
                     break;
                 default:
                     this.originTester = new OriginPipeTester();
@@ -256,8 +252,6 @@ namespace PipePerformanceTest
             {
                 case PipeBrand.CUSTOM:
                     return customTester.GetWriterMemory(bytes);
-                case PipeBrand.MAD:
-                    return madTester.GetWriterMemory(bytes);
                 case PipeBrand.ORIGIN:
                     return originTester.GetWriterMemory(bytes);
             }
@@ -271,9 +265,6 @@ namespace PipePerformanceTest
             {
                 case PipeBrand.CUSTOM:
                     this.customTester.Advance(bytes);
-                    break;
-                case PipeBrand.MAD:
-                    this.madTester.Advance(bytes);
                     break;
                 default:
                     this.originTester.Advance(bytes);
@@ -290,9 +281,6 @@ namespace PipePerformanceTest
                 case PipeBrand.CUSTOM:
                     this.customTester.Read(fileStream, bytes);
                     break;
-                case PipeBrand.MAD:
-                    this.madTester.Read(fileStream, bytes);
-                    break;
                 default:
                     this.originTester.Read(fileStream, bytes);
                     break;
@@ -306,9 +294,6 @@ namespace PipePerformanceTest
                 case PipeBrand.CUSTOM:
                     this.customTester.CompleteWriter();
                     break;
-                case PipeBrand.MAD:
-                    this.madTester.CompleteWriter();
-                    break;
                 default:
                     this.originTester.CompleteWriter();
                     break;
@@ -321,9 +306,6 @@ namespace PipePerformanceTest
             {
                 case PipeBrand.CUSTOM:
                     this.customTester.CompleteReader();
-                    break;
-                case PipeBrand.MAD:
-                    this.madTester.CompleteReader();
                     break;
                 default:
                     this.originTester.CompleteReader();
